@@ -9,6 +9,7 @@ const allowedDemoAccounts = new Set([
   'newhire.waiting@benefitsflow.demo',
   'newhire.eligible@benefitsflow.demo',
   'benefits.partner@benefitsflow.demo',
+  'billrush@benefitsflow.demo',
 ])
 
 const requestSchema = z.object({ email: z.string().email() })

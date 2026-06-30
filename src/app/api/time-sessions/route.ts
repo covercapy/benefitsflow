@@ -85,6 +85,23 @@ export async function POST(request: NextRequest) {
     .eq('worker_id', profile.worker_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Update daily_attendance for today — best-effort, don't fail if table missing
+  try {
+    const workDate = new Date(existing.clock_in).toISOString().split('T')[0]
+    await supabase.from('daily_attendance').upsert({
+      work_date: workDate,
+      worker_id: profile.worker_id,
+      display_name: profile.display_name,
+      first_clock_in: existing.clock_in,
+      last_clock_out: clockOut.toISOString(),
+      total_minutes: durationMinutes,
+      shift_count: 1,
+      pay_period: currentPayPeriod(),
+      updated_at: clockOut.toISOString(),
+    }, { onConflict: 'work_date,worker_id' })
+  } catch { /* table may not exist yet — ignore */ }
+
   return NextResponse.json({ success: true, duration_minutes: durationMinutes, clock_out: clockOut.toISOString() })
 }
 

@@ -47,6 +47,13 @@ const DEMO_ACCOUNTS = [
     display_name: 'Taylor Chen',
     scenario: 'Benefits Partner — eligibility exceptions, life events',
   },
+  {
+    email: 'billrush@benefitsflow.demo',
+    role: 'EMPLOYEE',
+    worker_id: 'ESI-10010',
+    display_name: 'Bill Rush',
+    scenario: 'Employee — created via HR Admin panel demo',
+  },
 ]
 
 export async function POST(request: Request) {

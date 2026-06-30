@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { UserRole, ROLE_LABELS } from '@/types'
+import { UserRole } from '@/types'
 import { Theme } from '@/lib/theme-context'
 import {
   LayoutDashboard, User, Users, Calendar, FolderOpen,
@@ -50,12 +50,11 @@ interface SidebarProps {
   currentRole: UserRole
   workerName: string
   employeeId: string
-  onRoleChange?: (role: UserRole) => void
   onLogout?: () => void
   theme?: Theme
 }
 
-export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onLogout, theme = 'dark' }: SidebarProps) {
+export function Sidebar({ currentRole, workerName, employeeId, onLogout, theme = 'dark' }: SidebarProps) {
   const pathname = usePathname()
   const isLight = theme === 'light'
   const isHR = ['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP'].includes(currentRole)
@@ -96,7 +95,6 @@ export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onL
 
   const logoBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
   const profileBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
-  const switcherBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
   const sectionLabelCls = isLight ? 'text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5' : 'text-[9px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5'
   const footerCls = isLight ? 'px-4 py-3 border-t border-slate-100 space-y-2' : 'px-4 py-3 border-t border-white/10 space-y-2'
   const logoutCls = isLight
@@ -106,11 +104,6 @@ export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onL
   const avatarBg = isHR ? 'bg-violet-600' : currentRole === 'MANAGER' ? 'bg-emerald-600' : 'bg-blue-600'
   const nameCls = isLight ? 'text-sm font-medium text-slate-900 truncate' : 'text-sm font-medium text-white truncate'
   const idCls = isLight ? 'text-xs text-slate-400' : 'text-xs text-slate-400'
-  const selectCls = isLight
-    ? 'mt-1 w-full bg-slate-50 text-slate-700 text-xs rounded-md px-2 py-1.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500'
-    : 'mt-1 w-full bg-[#243447] text-slate-200 text-xs rounded-md px-2 py-1.5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500'
-  const viewAsLabelCls = isLight ? 'text-[10px] text-slate-400 uppercase tracking-wider font-medium' : 'text-[10px] text-slate-500 uppercase tracking-wider font-medium'
-
   return (
     <aside className={sidebarCls}>
       {/* Logo */}
@@ -138,18 +131,6 @@ export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onL
           </div>
         </div>
       </div>
-
-      {/* Role Switcher (HRIS Analyst only) */}
-      {onRoleChange && (
-        <div className={cn('px-4 py-2', switcherBorderCls)}>
-          <label className={viewAsLabelCls}>View As</label>
-          <select value={currentRole} onChange={e => onRoleChange(e.target.value as UserRole)} className={selectCls}>
-            {(Object.keys(ROLE_LABELS) as UserRole[]).map(role => (
-              <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">

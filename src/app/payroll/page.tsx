@@ -210,6 +210,173 @@ function TimesheetsTab() {
   )
 }
 
+interface AttendanceRecord {
+  id: string
+  work_date: string
+  worker_id: string
+  display_name: string
+  first_clock_in: string
+  last_clock_out: string | null
+  total_minutes: number
+  shift_count: number
+  pay_period: string
+}
+
+const ATTENDANCE_HOURLY_RATES: Record<string, number> = {
+  'ESI-10000': 44.23,
+  'ESI-10001': 40.87,
+  'ESI-10002': 37.50,
+  'ESI-10004': 34.62,
+  'ESI-10005': 35.58,
+  'ESI-10006': 27.88,
+  'ESI-10007': 20.19,
+  'ESI-10009': 50.48,
+  'ESI-10010': 28.85,
+}
+
+function DailyAttendanceTab() {
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [payPeriod, setPayPeriod] = useState('')
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error' | 'empty'>('loading')
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/attendance/daily?all=1')
+        const json = await res.json()
+        if (json.error) { setStatus('error'); return }
+        setRecords(json.records || [])
+        setPayPeriod(json.pay_period || '')
+        setStatus(json.records?.length > 0 ? 'loaded' : 'empty')
+      } catch {
+        setStatus('error')
+      }
+    }
+    load()
+  }, [])
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center gap-3 py-8 text-slate-400 text-sm">
+        <div className="w-4 h-4 border-2 border-slate-300 border-t-violet-500 rounded-full animate-spin" />
+        Loading attendance records from Supabase…
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3">
+        <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-amber-800 text-sm">daily_attendance table not found</p>
+          <p className="text-amber-700 text-xs mt-1">Run this in Supabase SQL Editor:</p>
+          <code className="block bg-amber-100 text-amber-900 text-xs rounded-lg px-3 py-2 mt-2 font-mono">supabase/migrations/20260630_daily_attendance.sql</code>
+          <p className="text-amber-600 text-xs mt-2">Clock-outs will populate this table automatically once the migration is applied.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'empty') {
+    return (
+      <div className="text-center py-10 text-slate-400">
+        <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="font-medium text-sm text-slate-500">No attendance records this pay period</p>
+        <p className="text-xs mt-1">Complete a clock-in/clock-out cycle from Time &amp; Attendance — records appear here automatically</p>
+        {payPeriod && <p className="text-xs mt-2 text-violet-600 font-medium">Pay period: {payPeriod}</p>}
+      </div>
+    )
+  }
+
+  // Group by date
+  const byDate: Record<string, AttendanceRecord[]> = {}
+  for (const r of records) {
+    byDate[r.work_date] = byDate[r.work_date] || []
+    byDate[r.work_date].push(r)
+  }
+  const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a))
+
+  const totalMinutes = records.reduce((s, r) => s + (r.total_minutes || 0), 0)
+  const totalWages = records.reduce((s, r) => {
+    const rate = ATTENDANCE_HOURLY_RATES[r.worker_id] || 35
+    return s + (r.total_minutes / 60) * rate
+  }, 0)
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Daily Attendance — Current Pay Period</p>
+          {payPeriod && <p className="text-xs text-slate-400 mt-0.5">{payPeriod} · {records.length} records · {sortedDates.length} days</p>}
+        </div>
+        <span className="flex items-center gap-1.5 text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
+          <Cloud className="w-3 h-3" />Live from Supabase
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Days Worked</p>
+          <p className="text-xl font-bold text-slate-900">{sortedDates.length}</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Total Hours</p>
+          <p className="text-xl font-bold text-slate-900">{(totalMinutes / 60).toFixed(1)}h</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Est. Wages</p>
+          <p className="text-xl font-bold text-emerald-700">${totalWages.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {sortedDates.map(date => {
+        const dayRecords = byDate[date]
+        const dayMinutes = dayRecords.reduce((s, r) => s + (r.total_minutes || 0), 0)
+        const formattedDate = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        return (
+          <div key={date} className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-700">{formattedDate}</p>
+              <span className="text-xs text-slate-400">{(dayMinutes / 60).toFixed(1)}h total · {dayRecords.length} employees</span>
+            </div>
+            <table className="w-full">
+              <thead className="bg-slate-50/50 border-b border-slate-100">
+                <tr>
+                  {['Employee', 'Worker ID', 'Clock In', 'Clock Out', 'Hours', 'Hourly Rate', 'Est. Wages'].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-400 px-4 py-2">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dayRecords.map(r => {
+                  const rate = ATTENDANCE_HOURLY_RATES[r.worker_id] || 35
+                  const wages = (r.total_minutes / 60) * rate
+                  const clockIn = new Date(r.first_clock_in)
+                  const clockOut = r.last_clock_out ? new Date(r.last_clock_out) : null
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-sm font-medium text-slate-900">{r.display_name}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 font-mono">{r.worker_id}</td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-slate-700">{clockIn.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-slate-700">
+                        {clockOut ? clockOut.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : <span className="text-emerald-600 font-semibold">Active</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm font-semibold text-slate-900">{(r.total_minutes / 60).toFixed(2)}h</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-600">${rate.toFixed(2)}/hr</td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-emerald-700">${wages.toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const EMPLOYEES = [
   { id: 'ESI-10001', name: 'Jordan Rivera',   title: 'HR Solutions Analyst',  dept: 'HR Technology',       org: 'Ensign Services',         manager: 'Maya Johnson',   status: 'Active' as const, type: 'Full Time' as const, hire: '2024-01-15', salary: 85000, pto: { used: 5,  balance: 15 } },
   { id: 'ESI-10004', name: 'Elena Vasquez',   title: 'Registered Nurse',       dept: 'Clinical Care',       org: 'Sunrise Post-Acute Care',  manager: 'Maya Johnson',   status: 'Active' as const, type: 'Full Time' as const, hire: '2026-06-01', salary: 72000, pto: { used: 0,  balance: 0  } },
@@ -221,7 +388,7 @@ const EMPLOYEES = [
   { id: 'ESI-10002', name: 'Taylor Chen',     title: 'Benefits Partner',       dept: 'Total Rewards',       org: 'Ensign Services',          manager: 'Morgan Walsh',   status: 'Active' as const, type: 'Full Time' as const, hire: '2024-09-16', salary: 78000, pto: { used: 4,  balance: 16 } },
 ] as const
 
-type Tab = 'runs' | 'stubs' | 'deductions' | 'tax' | 'timesheets'
+type Tab = 'runs' | 'stubs' | 'deductions' | 'tax' | 'timesheets' | 'attendance'
 
 const PAY_RUNS = [
   { period: 'Jun 16–30, 2026', runDate: 'Jun 30, 2026', status: 'Processing', gross: 43250, deductions: 8640, net: 34610 },
@@ -274,6 +441,7 @@ export default function PayrollPage() {
     { key: 'deductions', label: 'Deductions Summary' },
     { key: 'tax', label: 'Tax Summary' },
     { key: 'timesheets', label: '🕐 Timesheets' },
+    { key: 'attendance', label: '📅 Daily Attendance' },
   ]
 
   return (
@@ -430,6 +598,9 @@ export default function PayrollPage() {
 
           {/* Timesheets */}
           {tab === 'timesheets' && <TimesheetsTab />}
+
+          {/* Daily Attendance */}
+          {tab === 'attendance' && <DailyAttendanceTab />}
 
           {/* Tax Summary */}
           {tab === 'tax' && (

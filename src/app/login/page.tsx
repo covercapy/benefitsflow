@@ -5,6 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { Heart, Shield, Users, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+const USERNAME_SHORTCUTS: Record<string, string> = {
+  nsong: 'hris.analyst@benefitsflow.demo',
+  maya: 'manager.maya@benefitsflow.demo',
+  jordan: 'enrolled@benefitsflow.demo',
+  billrush: 'billrush@benefitsflow.demo',
+}
+
 const DEMO_PERSONAS = [
   {
     email: 'hris.analyst@benefitsflow.demo',
@@ -104,10 +111,26 @@ export default function LoginPage() {
     setLoading('manual')
     setError(null)
 
-    // Standard email + password login
+    // Resolve username shortcut — e.g. "nsong" → "hris.analyst@benefitsflow.demo"
+    const resolvedEmail = USERNAME_SHORTCUTS[manualEmail.trim().toLowerCase()] || manualEmail.trim()
+    const isShortcut = resolvedEmail !== manualEmail.trim()
+
     try {
+      if (isShortcut) {
+        // Use the demo-login API so we use DEMO_ACCOUNT_PASSWORD consistently
+        const response = await withTimeout(fetch('/api/demo-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: resolvedEmail }),
+        }), 6000)
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Login failed')
+        window.location.href = '/dashboard'
+        return
+      }
+      // Standard email + password login
       const { error: signInError } = await withTimeout(
-        supabase.auth.signInWithPassword({ email: manualEmail, password: manualPassword }),
+        supabase.auth.signInWithPassword({ email: resolvedEmail, password: manualPassword }),
         4000
       )
       if (signInError) throw signInError
@@ -214,13 +237,14 @@ export default function LoginPage() {
             <div>
               <label className="text-xs text-slate-400 block mb-1">Email</label>
               <input
-                type="email"
+                type="text"
                 value={manualEmail}
                 onChange={e => setManualEmail(e.target.value)}
-                placeholder="email@benefitsflow.demo"
+                placeholder="email or shortcut (nsong, maya, jordan)"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />
+              <p className="text-[10px] text-slate-500 mt-0.5">Shortcuts: nsong · maya · jordan · billrush</p>
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1">Password</label>

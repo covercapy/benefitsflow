@@ -2,21 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { Sidebar } from './Sidebar'
-import { UserRole } from '@/types'
+import { UserRole, ROLE_LABELS } from '@/types'
 import { Bell, Search, HelpCircle, Sun, Moon } from 'lucide-react'
 import { RoleContext, EMPLOYEE_ROLES } from '@/lib/role-context'
-import { ROLE_LABELS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeProvider, useTheme } from '@/lib/theme-context'
 
-// Fallback personas for "View As" impersonation (HRIS_ANALYST only)
-const ROLE_PERSONAS: Record<UserRole, { name: string; employeeId: string }> = {
-  EMPLOYEE:         { name: 'Jordan Rivera',  employeeId: 'ESI-10001' },
-  MANAGER:          { name: 'Maya Johnson',   employeeId: 'ESI-10009' },
-  BENEFITS_PARTNER: { name: 'Taylor Chen',    employeeId: 'ESI-10002' },
-  HRIS_ANALYST:     { name: 'Nathan Song',    employeeId: 'ESI-10000' },
-  HR_LEADERSHIP:    { name: 'Morgan Walsh',   employeeId: 'ESI-10003' },
-}
 
 interface AppShellProps {
   children: React.ReactNode
@@ -28,28 +19,24 @@ interface AppShellInnerProps extends AppShellProps {
   currentRole: UserRole
   viewName: string
   viewId: string
-  sessionRole: UserRole
-  isHrisAnalyst: boolean
-  handleRoleChange: (role: UserRole) => void
   handleLogout: () => void
 }
 
 function AppShellInner({
   children, pageTitle, pageSubtitle,
-  currentRole, viewName, viewId, sessionRole, isHrisAnalyst,
-  handleRoleChange, handleLogout,
+  currentRole, viewName, viewId,
+  handleLogout,
 }: AppShellInnerProps) {
   const { theme, toggle } = useTheme()
   const bgCls = theme === 'dark' ? 'bg-slate-50' : 'bg-[#f8f7fc]'
 
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange, viewWorkerId: viewId, viewDisplayName: viewName }}>
+    <RoleContext.Provider value={{ currentRole, setCurrentRole: () => {}, viewWorkerId: viewId, viewDisplayName: viewName }}>
     <div className={`flex min-h-screen ${bgCls}`}>
       <Sidebar
         currentRole={currentRole}
         workerName={viewName}
         employeeId={viewId}
-        onRoleChange={isHrisAnalyst ? handleRoleChange : undefined}
         onLogout={handleLogout}
         theme={theme}
       />
@@ -69,13 +56,6 @@ function AppShellInner({
           </div>
 
           <div className="flex-1" />
-
-          {/* Impersonation indicator for HRIS Analyst */}
-          {isHrisAnalyst && currentRole !== sessionRole && (
-            <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
-              Viewing as {ROLE_LABELS[currentRole]}
-            </span>
-          )}
 
           {/* Role badge */}
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
@@ -128,11 +108,7 @@ function AppShellInner({
 export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
   const supabase = createClient()
 
-  // Session-derived identity
-  const [sessionRole, setSessionRole] = useState<UserRole>('EMPLOYEE')
-  const [isHrisAnalyst, setIsHrisAnalyst] = useState(false)
-
-  // Current view role — HRIS Analyst can switch to "View As" other roles
+  // Current view role
   const [currentRole, setCurrentRole] = useState<UserRole>('EMPLOYEE')
   const [viewName, setViewName] = useState('Loading...')
   const [viewId, setViewId] = useState('')
@@ -158,23 +134,12 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
       const role = profile.primary_role as UserRole
       const name = profile.display_name as string
       const workerId = profile.worker_id as string
-      setSessionRole(role)
-      setIsHrisAnalyst(role === 'HRIS_ANALYST')
       setCurrentRole(role)
       setViewName(name)
       setViewId(workerId)
     }
     void loadSession()
   }, [])
-
-  function handleRoleChange(role: UserRole) {
-    // Only HRIS Analyst can impersonate other roles
-    if (!isHrisAnalyst) return
-    const persona = ROLE_PERSONAS[role]
-    setCurrentRole(role)
-    setViewName(persona.name)
-    setViewId(persona.employeeId)
-  }
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -189,9 +154,6 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
         currentRole={currentRole}
         viewName={viewName}
         viewId={viewId}
-        sessionRole={sessionRole}
-        isHrisAnalyst={isHrisAnalyst}
-        handleRoleChange={handleRoleChange}
         handleLogout={handleLogout}
       >
         {children}

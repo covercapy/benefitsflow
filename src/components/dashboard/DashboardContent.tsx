@@ -15,6 +15,7 @@ import {
 import { useRole } from '@/lib/role-context'
 import { EmployeeDashboard } from './EmployeeDashboard'
 import { ManagerDashboard } from './ManagerDashboard'
+import { HRAdminPanel } from './HRAdminPanel'
 
 const PIE_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#6b7280']
 
@@ -180,6 +181,9 @@ function HRDashboardContent() {
           color="emerald"
         />
       </div>
+
+      {/* HR Admin — Create Employee */}
+      <HRAdminPanel />
 
       {/* Bottom disclaimer */}
       <p className="text-[11px] text-slate-400 text-center pt-2">
