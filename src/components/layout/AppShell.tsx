@@ -192,6 +192,21 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
       setSessionId(workerId)
       setIsHrisAnalyst(role === 'HRIS_ANALYST')
 
+      // For HRIS Analysts: restore the persisted "View as" role across navigation.
+      // Non-analysts are always locked to their own session role — no override possible.
+      if (role === 'HRIS_ANALYST') {
+        const stored = (typeof window !== 'undefined'
+          ? sessionStorage.getItem('bf_view_as')
+          : null) as UserRole | null
+        if (stored && stored !== role && ROLE_PERSONAS[stored]) {
+          const persona = ROLE_PERSONAS[stored]
+          setCurrentRole(stored)
+          setViewName(persona.name)
+          setViewId(persona.employeeId)
+          return
+        }
+      }
+
       setCurrentRole(role)
       setViewName(name)
       setViewId(workerId)
@@ -203,11 +218,14 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
     // Only HRIS Analyst may switch the view — all others are locked to their session role
     if (!isHrisAnalyst) return
     if (role === sessionRole) {
-      // Restore to own identity
+      // Restore to own identity and clear the persisted override
+      sessionStorage.removeItem('bf_view_as')
       setCurrentRole(sessionRole)
       setViewName(sessionName)
       setViewId(sessionId)
     } else {
+      // Persist the choice so it survives Next.js page navigation (AppShell remount)
+      sessionStorage.setItem('bf_view_as', role)
       const persona = ROLE_PERSONAS[role]
       setCurrentRole(role)
       setViewName(persona.name)

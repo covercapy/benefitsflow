@@ -1,14 +1,15 @@
 'use client'
 
-
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
-  Calendar, Heart, Clock, Shield,
-  ChevronRight, AlertTriangle, CheckCircle2,
-  Stethoscope, Lock, Zap, TrendingUp, Bell, Info
+  DollarSign, Heart, Calendar, Inbox,
+  Star, User, TrendingUp, FileText,
+  AlertTriangle, CheckCircle2, ChevronRight,
+  Stethoscope, Lock, Zap, Clock, Shield
 } from 'lucide-react'
 
+// ─── Types ───────────────────────────────────────────────────────────────────
 type EnrollmentState = 'WAITING' | 'ELIGIBLE' | 'ENROLLED'
 
 interface PersonaConfig {
@@ -31,6 +32,7 @@ interface PersonaConfig {
   openEnrollEnd: string
 }
 
+// ─── Persona data ─────────────────────────────────────────────────────────────
 const PERSONAS: Record<string, PersonaConfig> = {
   'ESI-10004': {
     name: 'Elena Vasquez', title: 'Registered Nurse', org: 'Sunrise Post-Acute Care',
@@ -62,9 +64,7 @@ const PERSONAS: Record<string, PersonaConfig> = {
     planName: 'Cigna Dental PPO Enhanced', planType: 'PPO',
     coverageTier: 'ES', monthlyPremium: 94, carrier: 'Cigna',
     annualUsed: 320, annualLimit: 1500,
-    dependents: [
-      { name: 'Amy Song', rel: 'Spouse' },
-    ],
+    dependents: [{ name: 'Amy Song', rel: 'Spouse' }],
     openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
   },
   'DEFAULT': {
@@ -77,6 +77,7 @@ const PERSONAS: Record<string, PersonaConfig> = {
   },
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysBetween(from: string) {
   return Math.floor((Date.now() - new Date(from).getTime()) / 86_400_000)
 }
@@ -85,18 +86,186 @@ function daysUntil(d: string) {
 }
 function tenure(hireDate: string) {
   const d = daysBetween(hireDate)
-  const yr = Math.floor(d / 365); const mo = Math.floor((d % 365) / 30)
+  const yr = Math.floor(d / 365)
+  const mo = Math.floor((d % 365) / 30)
   if (yr === 0 && mo === 0) return `${d} days`
   if (yr === 0) return `${mo} mo`
   return `${yr} yr ${mo} mo`
 }
 function tierLabel(t?: string) {
-  const m: Record<string, string> = { EO: 'Employee Only', ES: 'Employee + Spouse', EC: 'Employee + Child(ren)', EF: 'Employee + Family' }
+  const m: Record<string, string> = {
+    EO: 'Employee Only',
+    ES: 'Employee + Spouse',
+    EC: 'Employee + Child(ren)',
+    EF: 'Employee + Family',
+  }
   return t ? (m[t] || t) : '—'
 }
 
-// ─── Waiting Period Banner ───────────────────────────────────────────────────
-function WaitingBanner({ persona }: { persona: PersonaConfig }) {
+// ─── Worklet tile ─────────────────────────────────────────────────────────────
+interface WorkletProps {
+  href: string
+  icon: React.ElementType
+  label: string
+  iconBg: string
+  iconColor: string
+  badge?: number
+  disabled?: boolean
+}
+function Worklet({ href, icon: Icon, label, iconBg, iconColor, badge, disabled }: WorkletProps) {
+  const inner = (
+    <div className={cn(
+      'flex flex-col items-center gap-2 py-5 px-3 rounded-xl border transition-all text-center',
+      disabled
+        ? 'bg-slate-50 border-slate-100 cursor-not-allowed opacity-50'
+        : 'bg-white border-slate-200 hover:border-[#0875e1] hover:shadow-md hover:-translate-y-0.5 cursor-pointer'
+    )}>
+      <div className="relative">
+        <div className={cn('w-12 h-12 rounded-full flex items-center justify-center', iconBg)}>
+          <Icon className={cn('w-5 h-5', iconColor)} />
+        </div>
+        {badge != null && badge > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#e04646] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            {badge}
+          </span>
+        )}
+      </div>
+      <span className="text-xs font-semibold text-slate-700 leading-tight">{label}</span>
+    </div>
+  )
+  if (disabled) return inner
+  return <Link href={href}>{inner}</Link>
+}
+
+// ─── Awaiting Action strip ────────────────────────────────────────────────────
+function AwaitingAction({ items }: { items: { text: string; href: string; urgent?: boolean }[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="bg-[#fff8e1] border border-[#f5c518] rounded-xl px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <AlertTriangle className="w-4 h-4 text-[#c47c00] shrink-0" />
+        <p className="text-sm font-bold text-[#7a4d00]">Awaiting Your Action ({items.length})</p>
+      </div>
+      <ul className="space-y-1">
+        {items.map((item, i) => (
+          <li key={i}>
+            <Link href={item.href}
+              className="flex items-center gap-2 text-sm text-[#a36100] hover:text-[#7a4d00] group">
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+              <span className={cn('flex-1', item.urgent && 'font-semibold')}>{item.text}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// ─── Benefits rows (Workday-style) ────────────────────────────────────────────
+function BenefitRow({ persona }: { persona: PersonaConfig }) {
+  const atMax = !!(persona.annualUsed !== undefined
+    && persona.annualLimit
+    && persona.annualUsed >= persona.annualLimit)
+  const pct = persona.annualUsed && persona.annualLimit
+    ? Math.min(100, Math.round((persona.annualUsed / persona.annualLimit) * 100))
+    : 0
+
+  return (
+    <div className="divide-y divide-slate-100">
+      {/* Dental row */}
+      <div className="flex items-center gap-4 py-4 px-5 hover:bg-slate-50 transition-colors group">
+        <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+          <Stethoscope className="w-4 h-4 text-[#0875e1]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-slate-900">{persona.planName}</p>
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-wide">
+              Active
+            </span>
+            {atMax && (
+              <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                Max Reached
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {persona.carrier} · {tierLabel(persona.coverageTier)} · Dental
+          </p>
+          {/* Annual benefit bar */}
+          {persona.annualUsed !== undefined && persona.annualLimit !== undefined && (
+            <div className="mt-1.5">
+              <div className="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                <span>Annual benefit used</span>
+                <span className={cn('font-medium', atMax ? 'text-red-600' : 'text-slate-600')}>
+                  ${persona.annualUsed.toLocaleString()} / ${persona.annualLimit.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden w-48">
+                <div
+                  className={cn('h-full rounded-full', atMax ? 'bg-red-500' : 'bg-[#0875e1]')}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {/* Dependents */}
+          {persona.dependents && persona.dependents.length > 0 && (
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              {persona.dependents.map(d => (
+                <span key={d.name}
+                  className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                  {d.name} · {d.rel}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-bold text-slate-900">${persona.monthlyPremium}/mo</p>
+          <p className="text-[10px] text-slate-400">your cost</p>
+        </div>
+        <Link href="/enroll/dental"
+          className="shrink-0 text-xs font-semibold text-[#0875e1] hover:underline flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          Manage <ChevronRight className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {/* Medical row — placeholder */}
+      <div className="flex items-center gap-4 py-4 px-5 opacity-50">
+        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-slate-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-500">Medical</p>
+          <p className="text-xs text-slate-400">Not enrolled · Open enrollment Nov 1–30</p>
+        </div>
+        <Link href="/enroll"
+          className="shrink-0 text-xs font-semibold text-[#0875e1] hover:underline">
+          View
+        </Link>
+      </div>
+
+      {/* Vision row — placeholder */}
+      <div className="flex items-center gap-4 py-4 px-5 opacity-50">
+        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+          <Star className="w-4 h-4 text-slate-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-500">Vision</p>
+          <p className="text-xs text-slate-400">Not enrolled · Open enrollment Nov 1–30</p>
+        </div>
+        <Link href="/enroll"
+          className="shrink-0 text-xs font-semibold text-[#0875e1] hover:underline">
+          View
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ─── Waiting / Eligible state cards ───────────────────────────────────────────
+function WaitingCard({ persona }: { persona: PersonaConfig }) {
   const daysIn = daysBetween(persona.hireDate)
   const daysLeft = Math.max(0, persona.waitingDays - daysIn)
   const pct = Math.min(100, Math.round((daysIn / persona.waitingDays) * 100))
@@ -104,38 +273,71 @@ function WaitingBanner({ persona }: { persona: PersonaConfig }) {
   eligibleDate.setDate(eligibleDate.getDate() + persona.waitingDays)
 
   return (
-    <div className="bg-white rounded-2xl border border-amber-200 p-6">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-          <Lock className="w-6 h-6 text-amber-600" />
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+        <Lock className="w-4 h-4 text-amber-500" />
+        <p className="text-sm font-semibold text-slate-900">Benefits Enrollment</p>
+        <span className="ml-auto text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+          Waiting Period
+        </span>
+      </div>
+      <div className="p-5">
+        <p className="text-sm text-slate-600 mb-4">
+          Your 90-day waiting period ends on{' '}
+          <strong>{eligibleDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>.
+          You can preview available plans now.
+        </p>
+        <div className="mb-2 flex justify-between text-xs text-slate-500">
+          <span>Day {daysIn} of {persona.waitingDays}</span>
+          <span>{pct}% complete — {daysLeft} days remaining</span>
         </div>
-        <div className="flex-1">
-          <h3 className="font-semibold text-slate-900 text-lg">Enrollment opens in {daysLeft} days</h3>
-          <p className="text-sm text-slate-500 mt-0.5">
-            90-day waiting period in progress · Eligible on{' '}
-            {eligibleDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
-          <div className="mt-4">
-            <div className="flex justify-between text-xs text-slate-500 mb-1">
-              <span>Day {daysIn} of {persona.waitingDays}</span>
-              <span>{pct}% complete</span>
-            </div>
-            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="bg-amber-50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold text-amber-700">{daysIn}</p>
-              <p className="text-xs text-amber-600 mt-0.5">Days completed</p>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold text-slate-700">{daysLeft}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Days remaining</p>
-            </div>
-          </div>
-          <Link href="/enroll/dental" className="mt-4 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
-            Preview available plans <ChevronRight className="w-4 h-4" />
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-4">
+          <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+        </div>
+        <Link href="/enroll/dental"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0875e1] hover:underline">
+          Preview available plans <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function EligibleCard({ persona }: { persona: PersonaConfig }) {
+  const windowLeft = persona.enrollmentWindowEnd ? daysUntil(persona.enrollmentWindowEnd) : 30
+  const urgent = windowLeft <= 7
+  return (
+    <div className={cn('rounded-xl border-2 overflow-hidden', urgent ? 'border-red-400' : 'border-[#0875e1]')}>
+      <div className={cn('px-5 py-3 border-b flex items-center gap-2',
+        urgent ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100')}>
+        <Zap className={cn('w-4 h-4', urgent ? 'text-red-600' : 'text-[#0875e1]')} />
+        <p className={cn('text-sm font-bold', urgent ? 'text-red-900' : 'text-[#0875e1]')}>
+          Action Required — Enroll in Benefits
+        </p>
+        <span className={cn('ml-auto text-[11px] font-bold px-2 py-0.5 rounded',
+          urgent ? 'bg-red-200 text-red-800' : 'bg-blue-200 text-blue-800')}>
+          {windowLeft} days left
+        </span>
+      </div>
+      <div className="p-5 bg-white">
+        <p className="text-sm text-slate-700 mb-4">
+          Your waiting period is complete. Enroll now — your window closes{' '}
+          <strong>
+            {persona.enrollmentWindowEnd
+              ? new Date(persona.enrollmentWindowEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+              : 'soon'}
+          </strong>.
+          Missing this window means waiting until Open Enrollment in November.
+        </p>
+        <div className="flex gap-3">
+          <Link href="/enroll/dental"
+            className={cn('inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white',
+              urgent ? 'bg-red-600 hover:bg-red-700' : 'bg-[#0875e1] hover:bg-[#0660c4]')}>
+            <Stethoscope className="w-4 h-4" /> Enroll in Dental
+          </Link>
+          <Link href="/enroll"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50">
+            View all benefits
           </Link>
         </div>
       </div>
@@ -143,228 +345,198 @@ function WaitingBanner({ persona }: { persona: PersonaConfig }) {
   )
 }
 
-// ─── Newly Eligible Banner ───────────────────────────────────────────────────
-function EligibleBanner({ persona }: { persona: PersonaConfig }) {
-  const windowLeft = persona.enrollmentWindowEnd ? daysUntil(persona.enrollmentWindowEnd) : 30
-  const urgent = windowLeft <= 7
-
-  return (
-    <div className={cn('rounded-2xl border-2 p-6', urgent ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300')}>
-      <div className="flex items-start gap-4">
-        <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', urgent ? 'bg-red-100' : 'bg-emerald-100')}>
-          <Zap className={cn('w-6 h-6', urgent ? 'text-red-600' : 'text-emerald-600')} />
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className={cn('font-bold text-lg', urgent ? 'text-red-900' : 'text-emerald-900')}>
-              🎉 You&apos;re now eligible to enroll!
-            </h3>
-            <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', urgent ? 'bg-red-200 text-red-800' : 'bg-emerald-200 text-emerald-800')}>
-              {windowLeft} days left
-            </span>
-          </div>
-          <p className={cn('text-sm mt-1', urgent ? 'text-red-700' : 'text-emerald-700')}>
-            Your 90-day waiting period is complete. Window closes{' '}
-            {persona.enrollmentWindowEnd
-              ? new Date(persona.enrollmentWindowEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-              : 'soon'}.
-            Miss this window and you wait until Open Enrollment in November.
-          </p>
-          <div className="mt-4 flex gap-3 flex-wrap">
-            <Link href="/enroll/dental"
-              className={cn('inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white',
-                urgent ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700')}>
-              <Stethoscope className="w-4 h-4" /> Start Dental Enrollment
-            </Link>
-            <Link href="/enroll" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50">
-              View all benefits
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Active Enrolled Banner ──────────────────────────────────────────────────
-function EnrolledBanner({ persona }: { persona: PersonaConfig }) {
-  const atMax = !!(persona.annualUsed !== undefined && persona.annualLimit && persona.annualUsed >= persona.annualLimit)
-  const pct = persona.annualUsed && persona.annualLimit ? Math.min(100, Math.round((persona.annualUsed / persona.annualLimit) * 100)) : 0
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6">
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            <h3 className="font-semibold text-slate-900">Active Coverage — Plan Year 2026</h3>
-          </div>
-          <p className="text-sm text-slate-500 mt-0.5">{persona.planName} · {tierLabel(persona.coverageTier)}</p>
-        </div>
-        <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full shrink-0">Active</span>
-      </div>
-
-      {atMax && (
-        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-sm text-red-800">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1"><strong>Annual maximum reached (${persona.annualLimit?.toLocaleString()}).</strong> Remaining costs are 100% your responsibility until Jan 1.</span>
-          <Link href="/enroll/estimator" className="shrink-0 font-semibold underline">Estimator →</Link>
-        </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div><p className="text-xs text-slate-500">Carrier</p><p className="font-semibold text-slate-900">{persona.carrier}</p></div>
-        <div><p className="text-xs text-slate-500">Coverage</p><p className="font-semibold text-slate-900">{tierLabel(persona.coverageTier)}</p></div>
-        <div><p className="text-xs text-slate-500">Your cost</p><p className="font-semibold text-slate-900">${persona.monthlyPremium}/mo</p></div>
-      </div>
-
-      {persona.annualUsed !== undefined && persona.annualLimit !== undefined && (
-        <div>
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Annual benefit used</span>
-            <span className={cn('font-medium', atMax ? 'text-red-600' : 'text-slate-700')}>
-              ${persona.annualUsed.toLocaleString()} / ${persona.annualLimit.toLocaleString()}
-            </span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div className={cn('h-full rounded-full', atMax ? 'bg-red-500' : 'bg-emerald-500')} style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      )}
-
-      {persona.dependents && persona.dependents.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <p className="text-xs font-medium text-slate-500 mb-2">Covered dependents</p>
-          <div className="flex gap-2 flex-wrap">
-            {persona.dependents.map(d => (
-              <span key={d.name} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full">{d.name} · {d.rel}</span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 interface EmployeeDashboardProps {
   workerId: string
   displayName: string
 }
 
 export function EmployeeDashboard({ workerId, displayName }: EmployeeDashboardProps) {
-  // Derive persona from the worker_id passed down from session context.
-  // If workerId is not yet loaded (empty string), show loading skeleton.
   if (!workerId) {
-    return <div className="space-y-4 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-28 bg-slate-100 rounded-2xl"/>)}</div>
+    return (
+      <div className="space-y-4 animate-pulse max-w-4xl mx-auto">
+        {[1, 2, 3].map(i => <div key={i} className="h-28 bg-slate-100 rounded-xl" />)}
+      </div>
+    )
   }
 
-  // Look up the static persona config by worker_id; fall back to DEFAULT.
-  // Override the name with the live display_name from session so it stays
-  // accurate even for the DEFAULT catch-all case.
   const basePersona = PERSONAS[workerId] || PERSONAS.DEFAULT
-  const persona: PersonaConfig = displayName
-    ? { ...basePersona, name: displayName }
-    : basePersona
+  const persona: PersonaConfig = displayName ? { ...basePersona, name: displayName } : basePersona
 
   const tenureStr = tenure(persona.hireDate)
   const oeIn = daysUntil(persona.openEnrollStart)
+  const atMax = !!(persona.annualUsed !== undefined
+    && persona.annualLimit
+    && persona.annualUsed >= persona.annualLimit)
+
+  // Build "Awaiting Action" items
+  const actionItems: { text: string; href: string; urgent?: boolean }[] = []
+  if (persona.state === 'ELIGIBLE') {
+    const wl = persona.enrollmentWindowEnd ? daysUntil(persona.enrollmentWindowEnd) : 30
+    actionItems.push({
+      text: `Enroll in dental benefits — window closes in ${wl} days`,
+      href: '/enroll/dental',
+      urgent: wl <= 7,
+    })
+  }
+  if (atMax) {
+    actionItems.push({
+      text: 'Annual dental maximum reached ($1,500). Out-of-pocket until Jan 1.',
+      href: '/enroll/estimator',
+      urgent: true,
+    })
+  }
+
+  // Worklet definitions
+  const worklets = [
+    { href: '/payroll', icon: DollarSign, label: 'Pay', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+    { href: '/enroll', icon: Heart, label: 'Benefits', iconBg: 'bg-red-50', iconColor: 'text-red-500' },
+    { href: '/inbox', icon: Inbox, label: 'Inbox', iconBg: 'bg-orange-50', iconColor: 'text-orange-500', badge: actionItems.length },
+    { href: '/time-off', icon: Calendar, label: 'Time Off', iconBg: 'bg-purple-50', iconColor: 'text-purple-600', disabled: true },
+    { href: '/performance', icon: Star, label: 'Performance', iconBg: 'bg-yellow-50', iconColor: 'text-yellow-500', disabled: true },
+    { href: '/profile', icon: User, label: 'Profile', iconBg: 'bg-slate-100', iconColor: 'text-slate-500', disabled: true },
+    { href: '/career', icon: TrendingUp, label: 'Career', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', disabled: true },
+    { href: '/documents', icon: FileText, label: 'Documents', iconBg: 'bg-teal-50', iconColor: 'text-teal-600', disabled: true },
+  ]
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      {/* Welcome header */}
-      <div className="bg-[#1a2332] rounded-2xl p-6 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-transparent pointer-events-none" />
-        <div className="relative">
-          <p className="text-slate-400 text-sm">Welcome back,</p>
-          <h2 className="text-2xl font-bold mt-0.5">{persona.name}</h2>
-          <p className="text-slate-400 text-sm mt-1">{persona.title} · {persona.org}</p>
-          <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-slate-300">
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              Hired {new Date(persona.hireDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+    <div className="max-w-4xl mx-auto space-y-5">
+
+      {/* Workday-style top info bar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{persona.name}</h2>
+          <p className="text-sm text-slate-500">{persona.title} · {persona.org} · ESI-{workerId.replace('ESI-', '')}</p>
+        </div>
+        <div className="flex items-center gap-4 text-sm text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            {tenureStr} tenure
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            Hired {new Date(persona.hireDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+          {persona.state === 'ENROLLED' && (
+            <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Coverage Active
             </span>
-            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{tenureStr}</span>
-            {persona.state === 'ENROLLED' && persona.carrier && (
-              <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-red-400" />{persona.carrier} · {persona.planType}</span>
-            )}
-            {persona.state === 'ENROLLED' && (
-              <span className="flex items-center gap-1.5 text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" />Coverage Active</span>
-            )}
+          )}
+        </div>
+      </div>
+
+      {/* Awaiting Action */}
+      {actionItems.length > 0 && <AwaitingAction items={actionItems} />}
+
+      {/* Worklet grid */}
+      <div>
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">My Apps</p>
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+          {worklets.map(w => (
+            <Worklet key={w.label} {...w} />
+          ))}
+        </div>
+      </div>
+
+      {/* Benefits & Pay Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* Benefits section — 2/3 width */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Heart className="w-4 h-4 text-red-500" />
+              <h3 className="text-sm font-bold text-slate-900">Benefits &amp; Pay Hub</h3>
+            </div>
+            <Link href="/enroll"
+              className="text-xs font-semibold text-[#0875e1] hover:underline flex items-center gap-1">
+              View all <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Benefit plan rows */}
+          {persona.state === 'ENROLLED' && <BenefitRow persona={persona} />}
+          {persona.state === 'WAITING' && (
+            <div className="p-5"><WaitingCard persona={persona} /></div>
+          )}
+          {persona.state === 'ELIGIBLE' && (
+            <div className="p-5"><EligibleCard persona={persona} /></div>
+          )}
+        </div>
+
+        {/* Pay & deductions — 1/3 width */}
+        <div className="space-y-4">
+          {/* Pay summary */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-green-600" />
+              <h3 className="text-sm font-bold text-slate-900">Pay Summary</h3>
+            </div>
+            <div className="divide-y divide-slate-100">
+              <div className="px-5 py-3 flex justify-between items-center">
+                <p className="text-xs text-slate-500">Dental deduction</p>
+                <p className="text-sm font-bold text-slate-900 font-mono">
+                  {persona.monthlyPremium ? `$${persona.monthlyPremium}/mo` : '—'}
+                </p>
+              </div>
+              <div className="px-5 py-3 flex justify-between items-center">
+                <p className="text-xs text-slate-500">Medical deduction</p>
+                <p className="text-sm font-semibold text-slate-400 font-mono">—</p>
+              </div>
+              <div className="px-5 py-3 flex justify-between items-center">
+                <p className="text-xs text-slate-500">Vision deduction</p>
+                <p className="text-sm font-semibold text-slate-400 font-mono">—</p>
+              </div>
+              <div className="px-5 py-3 flex justify-between items-center bg-slate-50">
+                <p className="text-xs font-semibold text-slate-700">Total monthly</p>
+                <p className="text-sm font-bold text-slate-900 font-mono">
+                  {persona.monthlyPremium ? `$${persona.monthlyPremium}` : '$0'}/mo
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Open enrollment countdown */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Open Enrollment
+            </p>
+            <p className="text-xl font-bold text-slate-900">{oeIn > 0 ? `${oeIn}d` : 'Now'}</p>
+            <p className="text-xs text-slate-400">until Nov 1–30, 2026</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#0875e1] rounded-full" style={{ width: '18%' }} />
+            </div>
+          </div>
+
+          {/* Quick links */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <p className="text-xs font-bold text-slate-700">Quick Actions</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[
+                { label: 'View dental plan details', href: '/enroll/dental' },
+                { label: 'Estimate procedure costs', href: '/enroll/estimator' },
+                { label: 'View pay history', href: '/payroll' },
+                { label: 'Clock in / Time log', href: '/time-off' },
+              ].map(item => (
+                <Link key={item.label} href={item.href}
+                  className="flex items-center justify-between px-5 py-2.5 hover:bg-slate-50 transition-colors group">
+                  <span className="text-xs text-slate-700 group-hover:text-[#0875e1]">{item.label}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#0875e1]" />
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Primary state card */}
-      {persona.state === 'WAITING'  && <WaitingBanner  persona={persona} />}
-      {persona.state === 'ELIGIBLE' && <EligibleBanner persona={persona} />}
-      {persona.state === 'ENROLLED' && <EnrolledBanner persona={persona} />}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-          <p className="text-xl font-bold text-slate-900">{tenureStr}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Tenure</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-          <p className={cn('text-xl font-bold',
-            persona.state === 'ENROLLED' ? 'text-emerald-600' :
-            persona.state === 'ELIGIBLE' ? 'text-blue-600' : 'text-amber-600')}>
-            {persona.state === 'WAITING' ? 'Waiting' : persona.state === 'ELIGIBLE' ? 'Eligible' : 'Active'}
-          </p>
-          <p className="text-xs text-slate-500 mt-0.5">Benefits status</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-          <p className="text-xl font-bold text-slate-900">{oeIn > 0 ? `${oeIn}d` : 'Open'}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Next open enrollment</p>
-          <p className="text-[10px] text-slate-400">Nov 1–30, 2026</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-          <p className="text-xl font-bold text-slate-900">
-            {persona.monthlyPremium ? `$${persona.monthlyPremium}/mo` : '—'}
-          </p>
-          <p className="text-xs text-slate-500 mt-0.5">Deduction</p>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {persona.state !== 'WAITING' && (
-          <Link href="/enroll/dental" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all group">
-            <Stethoscope className="w-5 h-5 text-blue-600 mb-2" />
-            <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600">
-              {persona.state === 'ELIGIBLE' ? 'Enroll Now' : 'Dental Plan'}
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">{persona.state === 'ELIGIBLE' ? '30-day window open' : 'View / change'}</p>
-          </Link>
-        )}
-        <Link href="/enroll/estimator" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-violet-300 hover:shadow-sm transition-all group">
-          <TrendingUp className="w-5 h-5 text-violet-600 mb-2" />
-          <p className="text-sm font-semibold text-slate-900 group-hover:text-violet-600">Cost Estimator</p>
-          <p className="text-xs text-slate-500 mt-0.5">Dental procedures</p>
-        </Link>
-        <Link href="/inbox" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-amber-300 hover:shadow-sm transition-all group">
-          <Bell className="w-5 h-5 text-amber-600 mb-2" />
-          <p className="text-sm font-semibold text-slate-900 group-hover:text-amber-600">Inbox</p>
-          <p className="text-xs text-slate-500 mt-0.5">Tasks &amp; alerts</p>
-        </Link>
-        <Link href="/enroll" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-emerald-300 hover:shadow-sm transition-all group">
-          <Shield className="w-5 h-5 text-emerald-600 mb-2" />
-          <p className="text-sm font-semibold text-slate-900 group-hover:text-emerald-600">All Benefits</p>
-          <p className="text-xs text-slate-500 mt-0.5">Medical, vision, FSA</p>
-        </Link>
-      </div>
-
-      {persona.state === 'WAITING' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2">
-          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-sm text-blue-800">
-            <strong>Plan Preview available.</strong> You can compare plans and estimate costs now.
-            Once eligible you&apos;ll have 30 days to enroll. &nbsp;
-            <Link href="/enroll/dental" className="underline font-medium">Preview plans →</Link>
-          </p>
-        </div>
-      )}
+      {/* Footer */}
+      <p className="text-[11px] text-slate-400 text-center pt-2">
+        BenefitsFlow HRIS Lab · Plan Year 2026 · All data is fictional
+      </p>
     </div>
   )
 }
