@@ -1,488 +1,355 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import {
-  Calendar, Heart, Clock, TrendingUp, Star, Shield,
-  ChevronRight, AlertTriangle, CheckCircle2, Bell,
-  User, Stethoscope, Calculator, FileText, Gift,
-  Award, Zap, RefreshCw, Info, ArrowRight
+  Calendar, Heart, Clock, Shield,
+  ChevronRight, AlertTriangle, CheckCircle2,
+  Stethoscope, Lock, Zap, TrendingUp, Bell, Info
 } from 'lucide-react'
 
-// ── Demo worker profile (Jordan Rivera, ESI-10001) ─────────────────────────
-const DEMO_EMPLOYEE = {
-  id: 'ESI-10001',
-  firstName: 'Jordan',
-  lastName: 'Rivera',
-  title: 'HR Solutions Analyst',
-  department: 'Human Resources',
-  org: 'Ensign Services, Inc.',
-  hireDate: '2024-01-15',
-  state: 'CA',
-  weeklyHours: 40,
-  // Benefits
-  enrollmentDate: '2024-02-01',   // when coverage started
-  planName: 'Cigna Dental PPO Enhanced',
-  planType: 'PPO',
-  coverageTier: 'EF',             // Employee + Family
-  monthlyPremium: 189,
-  carrier: 'Cigna',
-  // Accumulators YTD 2026
-  deductibleUsed: 50,
-  deductibleLimit: 50,
-  annualUsed: 1500,
-  annualLimit: 1500,
-  orthoUsed: 750,
-  orthoLimit: 1500,
-  // Dependents
-  dependents: [
-    { name: 'Sarah Rivera', rel: 'Spouse', dob: '1989-03-14' },
-    { name: 'Lily Rivera',  rel: 'Child',  dob: '2015-07-22' },
-    { name: 'Noah Rivera',  rel: 'Child',  dob: '2018-11-05' },
-  ],
-  // Open enrollment window (next one)
-  openEnrollStart: '2026-11-01',
-  openEnrollEnd:   '2026-11-30',
-  coverageEffective: '2027-01-01',
+type EnrollmentState = 'WAITING' | 'ELIGIBLE' | 'ENROLLED'
+
+interface PersonaConfig {
+  name: string
+  title: string
+  org: string
+  hireDate: string
+  waitingDays: number
+  state: EnrollmentState
+  planName?: string
+  planType?: string
+  coverageTier?: string
+  monthlyPremium?: number
+  carrier?: string
+  annualUsed?: number
+  annualLimit?: number
+  dependents?: { name: string; rel: string }[]
+  enrollmentWindowEnd?: string
+  openEnrollStart: string
+  openEnrollEnd: string
 }
 
-// ─── Utility helpers ────────────────────────────────────────────────────────
-function dateDiff(from: string, to: Date = new Date()) {
-  const start = new Date(from)
-  const totalDays = Math.floor((to.getTime() - start.getTime()) / 86_400_000)
-  const years  = Math.floor(totalDays / 365)
-  const months = Math.floor((totalDays % 365) / 30)
-  const days   = totalDays % 30
-  return { years, months, days, totalDays }
+const PERSONAS: Record<string, PersonaConfig> = {
+  'ESI-10004': {
+    name: 'Elena Vasquez', title: 'Registered Nurse', org: 'Sunrise Post-Acute Care',
+    hireDate: '2026-06-01', waitingDays: 90, state: 'WAITING',
+    openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
+  },
+  'ESI-10005': {
+    name: 'Marcus Williams', title: 'Registered Nurse', org: 'Sunrise Post-Acute Care',
+    hireDate: '2026-03-31', waitingDays: 90, state: 'ELIGIBLE',
+    enrollmentWindowEnd: '2026-07-29',
+    openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
+  },
+  'ESI-10001': {
+    name: 'Jordan Rivera', title: 'HR Solutions Analyst', org: 'Ensign Services, Inc.',
+    hireDate: '2024-01-15', waitingDays: 90, state: 'ENROLLED',
+    planName: 'Cigna Dental PPO Enhanced', planType: 'PPO',
+    coverageTier: 'EF', monthlyPremium: 189, carrier: 'Cigna',
+    annualUsed: 1500, annualLimit: 1500,
+    dependents: [
+      { name: 'Sarah Rivera', rel: 'Spouse' },
+      { name: 'Lily Rivera', rel: 'Child' },
+      { name: 'Noah Rivera', rel: 'Child' },
+    ],
+    openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
+  },
+  'DEFAULT': {
+    name: 'Team Member', title: 'Employee', org: 'Ensign Services, Inc.',
+    hireDate: '2025-06-01', waitingDays: 0, state: 'ENROLLED',
+    planName: 'Cigna Dental PPO', planType: 'PPO',
+    coverageTier: 'EO', monthlyPremium: 8.50, carrier: 'Cigna',
+    annualUsed: 200, annualLimit: 1500,
+    openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
+  },
 }
 
-function daysUntil(dateStr: string) {
-  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
+function daysBetween(from: string) {
+  return Math.floor((Date.now() - new Date(from).getTime()) / 86_400_000)
+}
+function daysUntil(d: string) {
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000)
+}
+function tenure(hireDate: string) {
+  const d = daysBetween(hireDate)
+  const yr = Math.floor(d / 365); const mo = Math.floor((d % 365) / 30)
+  if (yr === 0 && mo === 0) return `${d} days`
+  if (yr === 0) return `${mo} mo`
+  return `${yr} yr ${mo} mo`
+}
+function tierLabel(t?: string) {
+  const m: Record<string, string> = { EO: 'Employee Only', ES: 'Employee + Spouse', EC: 'Employee + Child(ren)', EF: 'Employee + Family' }
+  return t ? (m[t] || t) : '—'
 }
 
-function fmtTenure(years: number, months: number, days: number) {
-  if (years === 0 && months === 0) return `${days} days`
-  if (years === 0) return `${months} mo`
-  if (months === 0) return `${years} yr`
-  return `${years} yr ${months} mo`
-}
+// ─── Waiting Period Banner ───────────────────────────────────────────────────
+function WaitingBanner({ persona }: { persona: PersonaConfig }) {
+  const daysIn = daysBetween(persona.hireDate)
+  const daysLeft = Math.max(0, persona.waitingDays - daysIn)
+  const pct = Math.min(100, Math.round((daysIn / persona.waitingDays) * 100))
+  const eligibleDate = new Date(persona.hireDate)
+  eligibleDate.setDate(eligibleDate.getDate() + persona.waitingDays)
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, sub, color = 'blue', badge }:
-  { icon: React.ElementType; label: string; value: string; sub?: string; color?: string; badge?: string }) {
-  const colorMap: Record<string, string> = {
-    blue:   'bg-blue-50  text-blue-600',
-    teal:   'bg-teal-50  text-teal-600',
-    violet: 'bg-violet-50 text-violet-600',
-    amber:  'bg-amber-50  text-amber-600',
-    emerald:'bg-emerald-50 text-emerald-600',
-    rose:   'bg-rose-50   text-rose-600',
-  }
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col gap-3">
-      <div className="flex items-start justify-between">
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', colorMap[color])}>
-          <Icon className="w-5 h-5" />
+    <div className="bg-white rounded-2xl border border-amber-200 p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+          <Lock className="w-6 h-6 text-amber-600" />
         </div>
-        {badge && (
-          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{badge}</span>
-        )}
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-slate-900 leading-none">{value}</p>
-        <p className="text-xs font-medium text-slate-500 mt-1">{label}</p>
-        {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-function AccGauge({ label, used, limit, color }: { label: string; used: number; limit: number; color: string }) {
-  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
-  const remaining = Math.max(0, limit - used)
-  const barColor = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : color
-  const maxReached = pct >= 100
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-700">{label}</span>
-        <span className={cn('text-xs font-bold', maxReached ? 'text-red-600' : 'text-slate-800')}>
-          {maxReached ? '⚠ MAX REACHED' : `$${remaining} left`}
-        </span>
-      </div>
-      <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
-      </div>
-      <div className="flex items-center justify-between text-[10px] text-slate-400">
-        <span>${used} used</span>
-        <span>of ${limit}</span>
-      </div>
-    </div>
-  )
-}
-
-// Animated countdown ring
-function CountdownRing({ daysLeft, totalWindow }: { daysLeft: number; totalWindow: number }) {
-  const pct = Math.max(0, Math.min(100, (daysLeft / totalWindow) * 100))
-  const r = 40
-  const circ = 2 * Math.PI * r
-  const offset = circ - (pct / 100) * circ
-  const urgent = daysLeft <= 14
-  const color = urgent ? '#ef4444' : daysLeft <= 30 ? '#f59e0b' : '#2563eb'
-
-  return (
-    <div className="flex flex-col items-center">
-      <svg width="100" height="100" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
-        <circle
-          cx="50" cy="50" r={r} fill="none"
-          stroke={color} strokeWidth="10"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 50 50)"
-          style={{ transition: 'stroke-dashoffset 1s ease' }}
-        />
-        <text x="50" y="46" textAnchor="middle" fill={color} fontSize="18" fontWeight="700">{daysLeft}</text>
-        <text x="50" y="60" textAnchor="middle" fill="#94a3b8" fontSize="9">days</text>
-      </svg>
-      <p className="text-xs font-semibold text-slate-600 mt-1">until open enrollment</p>
-    </div>
-  )
-}
-
-// Milestone timeline
-function TenureTimeline({ hireDate, enrollDate }: { hireDate: string; enrollDate: string }) {
-  const today = new Date()
-  const hire = new Date(hireDate)
-
-  const milestones = [
-    { date: hireDate,     label: 'First Day',            icon: '🧑‍💼', reached: true },
-    { date: enrollDate,   label: 'Benefits Active',      icon: '✅', reached: true },
-    {
-      date: (() => { const d = new Date(hire); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0,10) })(),
-      label: '1-Year Anniversary',
-      icon: '🎂',
-      reached: new Date(hireDate).setFullYear(new Date(hireDate).getFullYear() + 1) <= today.getTime(),
-    },
-    {
-      date: (() => { const d = new Date(hire); d.setFullYear(d.getFullYear() + 3); return d.toISOString().slice(0,10) })(),
-      label: '3-Year Vesting',
-      icon: '💎',
-      reached: new Date(hireDate).setFullYear(new Date(hireDate).getFullYear() + 3) <= today.getTime(),
-    },
-    { date: '2026-11-01', label: 'Open Enrollment Opens', icon: '📋', reached: false },
-    { date: '2027-01-01', label: '2027 Coverage Starts',  icon: '🗓',  reached: false },
-  ]
-
-  return (
-    <div className="relative">
-      <div className="absolute left-5 top-2 bottom-2 w-px bg-slate-200" />
-      <div className="space-y-4">
-        {milestones.map((m, i) => (
-          <div key={i} className="relative flex items-start gap-4 pl-2">
-            <div className={cn(
-              'w-7 h-7 rounded-full flex items-center justify-center text-sm border-2 shrink-0 z-10',
-              m.reached ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-200'
-            )}>
-              {m.reached
-                ? <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                : <span className="text-[11px]">{m.icon}</span>}
+        <div className="flex-1">
+          <h3 className="font-semibold text-slate-900 text-lg">Enrollment opens in {daysLeft} days</h3>
+          <p className="text-sm text-slate-500 mt-0.5">
+            90-day waiting period in progress · Eligible on{' '}
+            {eligibleDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Day {daysIn} of {persona.waitingDays}</span>
+              <span>{pct}% complete</span>
             </div>
-            <div className="flex-1 pb-1">
-              <p className={cn('text-xs font-semibold', m.reached ? 'text-slate-900' : 'text-slate-400')}>{m.label}</p>
-              <p className="text-[10px] text-slate-400">{m.date}
-                {!m.reached && daysUntil(m.date) > 0 && ` · ${daysUntil(m.date)} days away`}
-              </p>
+            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ─── Main component ──────────────────────────────────────────────────────────
-export function EmployeeDashboard() {
-  const e = DEMO_EMPLOYEE
-  const today = new Date()
-
-  const tenure  = dateDiff(e.hireDate)
-  const enrolled = dateDiff(e.enrollmentDate)
-  const daysToOE = daysUntil(e.openEnrollStart)
-  const oeWindowDays = daysUntil(e.coverageEffective)  // days until new coverage year
-  const biweeklyPremium = parseFloat((e.monthlyPremium * 12 / 26).toFixed(2))
-
-  const coverageTierMap: Record<string, string> = {
-    EO: 'Employee Only', ES: 'Employee + Spouse', EC: 'Employee + Children', EF: 'Employee + Family',
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto space-y-6">
-
-      {/* ── Welcome banner ─────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#243447] rounded-2xl p-6 text-white flex items-center justify-between">
-        <div>
-          <p className="text-slate-400 text-sm mb-0.5">Welcome back,</p>
-          <h1 className="text-2xl font-bold">{e.firstName} {e.lastName}</h1>
-          <p className="text-slate-300 text-sm mt-0.5">{e.title} · {e.org}</p>
-          <div className="flex items-center gap-3 mt-3">
-            <span className="flex items-center gap-1.5 text-xs text-slate-300">
-              <Calendar className="w-3.5 h-3.5" />
-              Hired {e.hireDate}
-            </span>
-            <span className="text-slate-600">·</span>
-            <span className="flex items-center gap-1.5 text-xs text-slate-300">
-              <Heart className="w-3.5 h-3.5 text-red-400" />
-              {e.carrier} · {e.planType}
-            </span>
-            <span className="text-slate-600">·</span>
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Coverage Active
-            </span>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-amber-700">{daysIn}</p>
+              <p className="text-xs text-amber-600 mt-0.5">Days completed</p>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-slate-700">{daysLeft}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Days remaining</p>
+            </div>
           </div>
-        </div>
-        {/* Avatar */}
-        <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-bold text-white shrink-0">
-          {e.firstName[0]}{e.lastName[0]}
-        </div>
-      </div>
-
-      {/* ── Annual max alert ───────────────────────────────────────────── */}
-      {e.annualUsed >= e.annualLimit && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm">
-          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-          <div className="flex-1">
-            <span className="font-semibold text-red-800">Annual dental maximum reached ($1,500).</span>
-            <span className="text-red-700 ml-1">All remaining dental costs this plan year are 100% your responsibility. New limit resets Jan 1, 2027.</span>
-          </div>
-          <Link href="/enroll/estimator" className="text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors">
-            Cost Estimator →
+          <Link href="/enroll/dental" className="mt-4 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            Preview available plans <ChevronRight className="w-4 h-4" />
           </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Newly Eligible Banner ───────────────────────────────────────────────────
+function EligibleBanner({ persona }: { persona: PersonaConfig }) {
+  const windowLeft = persona.enrollmentWindowEnd ? daysUntil(persona.enrollmentWindowEnd) : 30
+  const urgent = windowLeft <= 7
+
+  return (
+    <div className={cn('rounded-2xl border-2 p-6', urgent ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300')}>
+      <div className="flex items-start gap-4">
+        <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center shrink-0', urgent ? 'bg-red-100' : 'bg-emerald-100')}>
+          <Zap className={cn('w-6 h-6', urgent ? 'text-red-600' : 'text-emerald-600')} />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className={cn('font-bold text-lg', urgent ? 'text-red-900' : 'text-emerald-900')}>
+              🎉 You&apos;re now eligible to enroll!
+            </h3>
+            <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', urgent ? 'bg-red-200 text-red-800' : 'bg-emerald-200 text-emerald-800')}>
+              {windowLeft} days left
+            </span>
+          </div>
+          <p className={cn('text-sm mt-1', urgent ? 'text-red-700' : 'text-emerald-700')}>
+            Your 90-day waiting period is complete. Window closes{' '}
+            {persona.enrollmentWindowEnd
+              ? new Date(persona.enrollmentWindowEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+              : 'soon'}.
+            Miss this window and you wait until Open Enrollment in November.
+          </p>
+          <div className="mt-4 flex gap-3 flex-wrap">
+            <Link href="/enroll/dental"
+              className={cn('inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white',
+                urgent ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700')}>
+              <Stethoscope className="w-4 h-4" /> Start Dental Enrollment
+            </Link>
+            <Link href="/enroll" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50">
+              View all benefits
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Active Enrolled Banner ──────────────────────────────────────────────────
+function EnrolledBanner({ persona }: { persona: PersonaConfig }) {
+  const atMax = !!(persona.annualUsed !== undefined && persona.annualLimit && persona.annualUsed >= persona.annualLimit)
+  const pct = persona.annualUsed && persona.annualLimit ? Math.min(100, Math.round((persona.annualUsed / persona.annualLimit) * 100)) : 0
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-6">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            <h3 className="font-semibold text-slate-900">Active Coverage — Plan Year 2026</h3>
+          </div>
+          <p className="text-sm text-slate-500 mt-0.5">{persona.planName} · {tierLabel(persona.coverageTier)}</p>
+        </div>
+        <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full shrink-0">Active</span>
+      </div>
+
+      {atMax && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-sm text-red-800">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span className="flex-1"><strong>Annual maximum reached (${persona.annualLimit?.toLocaleString()}).</strong> Remaining costs are 100% your responsibility until Jan 1.</span>
+          <Link href="/enroll/estimator" className="shrink-0 font-semibold underline">Estimator →</Link>
         </div>
       )}
 
-      {/* ── Stat cards row ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Award}
-          label="Company tenure"
-          value={fmtTenure(tenure.years, tenure.months, tenure.days)}
-          sub={`${tenure.totalDays.toLocaleString()} days · since ${e.hireDate}`}
-          color="blue"
-          badge={tenure.years >= 1 ? `${tenure.years}yr` : undefined}
-        />
-        <StatCard
-          icon={Heart}
-          label="Enrolled in benefits"
-          value={fmtTenure(enrolled.years, enrolled.months, enrolled.days)}
-          sub={`Coverage started ${e.enrollmentDate}`}
-          color="rose"
-        />
-        <StatCard
-          icon={Calendar}
-          label="Next open enrollment"
-          value={daysToOE > 0 ? `${daysToOE}d` : 'Open Now!'}
-          sub={daysToOE > 0 ? `Starts ${e.openEnrollStart} · Ends ${e.openEnrollEnd}` : `Closes ${e.openEnrollEnd}`}
-          color={daysToOE <= 14 ? 'amber' : 'violet'}
-          badge={daysToOE <= 0 ? 'OPEN' : daysToOE <= 30 ? 'Soon' : undefined}
-        />
-        <StatCard
-          icon={Shield}
-          label="Your paycheck deduction"
-          value={`$${biweeklyPremium}`}
-          sub={`Per paycheck · $${e.monthlyPremium}/mo · ${coverageTierMap[e.coverageTier]}`}
-          color="emerald"
-        />
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <div><p className="text-xs text-slate-500">Carrier</p><p className="font-semibold text-slate-900">{persona.carrier}</p></div>
+        <div><p className="text-xs text-slate-500">Coverage</p><p className="font-semibold text-slate-900">{tierLabel(persona.coverageTier)}</p></div>
+        <div><p className="text-xs text-slate-500">Your cost</p><p className="font-semibold text-slate-900">${persona.monthlyPremium}/mo</p></div>
       </div>
 
-      {/* ── Main body ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* Left 2 cols */}
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Current plan card */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                <Heart className="w-4 h-4 text-red-400" /> Your Dental Plan – 2026
-              </h2>
-              <Link href="/enroll/dental"
-                className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
-                View / Change <ChevronRight className="w-3 h-3" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {[
-                ['Plan', e.planName],
-                ['Plan Type', e.planType],
-                ['Coverage', coverageTierMap[e.coverageTier]],
-                ['Carrier', e.carrier],
-                ['State', `${e.state} (auto-assigned)`],
-                ['Effective', e.enrollmentDate],
-              ].map(([k, v]) => (
-                <div key={k} className="bg-slate-50 rounded-xl px-3 py-2.5">
-                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-0.5">{k}</p>
-                  <p className="text-xs font-semibold text-slate-800">{v}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Dependents strip */}
-            {e.dependents.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Covered Dependents</p>
-                <div className="flex flex-wrap gap-2">
-                  {e.dependents.map(dep => {
-                    const age = Math.floor((Date.now() - new Date(dep.dob).getTime()) / (365.25 * 86_400_000))
-                    return (
-                      <div key={dep.name} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-                        <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center text-[9px] font-bold text-teal-700">
-                          {dep.name.split(' ').map((n: string) => n[0]).join('')}
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-medium text-slate-800 leading-none">{dep.name}</p>
-                          <p className="text-[9px] text-slate-400">{dep.rel} · Age {age}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+      {persona.annualUsed !== undefined && persona.annualLimit !== undefined && (
+        <div>
+          <div className="flex justify-between text-xs text-slate-500 mb-1">
+            <span>Annual benefit used</span>
+            <span className={cn('font-medium', atMax ? 'text-red-600' : 'text-slate-700')}>
+              ${persona.annualUsed.toLocaleString()} / ${persona.annualLimit.toLocaleString()}
+            </span>
           </div>
-
-          {/* Accumulator gauges */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-blue-500" /> Dental Accumulators – YTD 2026
-              </h2>
-              <span className="text-[10px] text-slate-400">Resets Jan 1, 2027</span>
-            </div>
-            <div className="space-y-5">
-              <AccGauge label="Annual Deductible" used={e.deductibleUsed} limit={e.deductibleLimit} color="bg-blue-500" />
-              <AccGauge label="Annual Maximum Benefit" used={e.annualUsed} limit={e.annualLimit} color="bg-blue-500" />
-              <AccGauge label="Orthodontia Lifetime Maximum" used={e.orthoUsed} limit={e.orthoLimit} color="bg-violet-500" />
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2">
-              <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <p className="text-[11px] text-slate-400">
-                The annual deductible and annual max reset every January 1. The orthodontia lifetime maximum is a one-time total — once reached, no further ortho benefits are available under this plan.
-              </p>
-            </div>
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className={cn('h-full rounded-full', atMax ? 'bg-red-500' : 'bg-emerald-500')} style={{ width: `${pct}%` }} />
           </div>
+        </div>
+      )}
 
-          {/* Open enrollment countdown */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-4">
-              <RefreshCw className="w-4 h-4 text-violet-500" /> Next Open Enrollment
-            </h2>
-            <div className="flex items-center gap-6">
-              <CountdownRing daysLeft={Math.max(0, daysToOE)} totalWindow={180} />
-              <div className="flex-1 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    ['Window Opens',      e.openEnrollStart],
-                    ['Window Closes',     e.openEnrollEnd],
-                    ['New Coverage Year', e.coverageEffective],
-                    ['Days to Change',    '30 days (window)'],
-                  ].map(([k, v]) => (
-                    <div key={k} className="bg-slate-50 rounded-xl px-3 py-2">
-                      <p className="text-[10px] text-slate-400 font-medium">{k}</p>
-                      <p className="text-xs font-bold text-slate-800">{v}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-violet-50 border border-violet-200 rounded-xl px-3 py-2.5">
-                  <p className="text-[11px] text-violet-800 font-medium mb-1">What you can change during open enrollment:</p>
-                  <ul className="text-[10px] text-violet-700 space-y-0.5 list-disc list-inside">
-                    <li>Switch between PPO and DHMO</li>
-                    <li>Change coverage tier (add/remove dependents)</li>
-                    <li>Enroll in or change FSA election</li>
-                    <li>Update vision plan</li>
-                  </ul>
-                </div>
-                <p className="text-[10px] text-slate-400 flex items-start gap-1.5">
-                  <Zap className="w-3 h-3 shrink-0 mt-0.5 text-amber-400" />
-                  Outside open enrollment, you can only make changes within 30 days of a qualifying life event (marriage, birth, job loss, etc.)
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'Enroll / Change Plan', href: '/enroll/dental', icon: Stethoscope, color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
-              { label: 'Cost Estimator', href: '/enroll/estimator', icon: Calculator, color: 'text-teal-600 bg-teal-50 hover:bg-teal-100' },
-              { label: 'My Inbox', href: '/inbox', icon: Bell, color: 'text-violet-600 bg-violet-50 hover:bg-violet-100' },
-              { label: 'Report Life Event', href: '/inbox', icon: FileText, color: 'text-amber-600 bg-amber-50 hover:bg-amber-100' },
-            ].map(a => (
-              <Link key={a.href + a.label} href={a.href}
-                className={cn('flex flex-col items-center gap-2 rounded-xl px-3 py-4 text-center transition-colors border border-transparent hover:border-current/10', a.color)}>
-                <a.icon className="w-5 h-5" />
-                <span className="text-xs font-semibold leading-snug">{a.label}</span>
-              </Link>
+      {persona.dependents && persona.dependents.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <p className="text-xs font-medium text-slate-500 mb-2">Covered dependents</p>
+          <div className="flex gap-2 flex-wrap">
+            {persona.dependents.map(d => (
+              <span key={d.name} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full">{d.name} · {d.rel}</span>
             ))}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
 
-        {/* Right column: timeline + benefits snapshot */}
-        <div className="space-y-5">
+// ─── Main ────────────────────────────────────────────────────────────────────
+export function EmployeeDashboard() {
+  const supabase = createClient()
+  const [persona, setPersona] = useState<PersonaConfig | null>(null)
 
-          {/* Employment timeline */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-4">
-              <Star className="w-4 h-4 text-amber-400" /> Your Journey
-            </h2>
-            <TenureTimeline hireDate={e.hireDate} enrollDate={e.enrollmentDate} />
-          </div>
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const wid = session?.user?.user_metadata?.worker_id || 'ESI-10001'
+      setPersona(PERSONAS[wid] || PERSONAS['DEFAULT'])
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-          {/* Benefits snapshot */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-3">
-              <Gift className="w-4 h-4 text-rose-400" /> Benefits Snapshot
-            </h2>
-            <div className="space-y-2">
-              {[
-                { label: 'Dental', status: 'Active · PPO', color: 'text-emerald-600', href: '/enroll/dental' },
-                { label: 'Vision', status: 'Active · VSP', color: 'text-emerald-600', href: '/enroll/vision' },
-                { label: 'Medical', status: 'Active · Kaiser HMO', color: 'text-emerald-600', href: '/enroll' },
-                { label: 'FSA', status: '$1,800 elected', color: 'text-blue-600', href: '/enroll/fsa' },
-                { label: 'Life Insurance', status: '2× salary (basic)', color: 'text-slate-500', href: '/enroll' },
-                { label: '401(k)', status: '6% contribution + 3% match', color: 'text-emerald-600', href: '/enroll' },
-              ].map(b => (
-                <div key={b.label} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
-                  <span className="text-xs font-medium text-slate-700">{b.label}</span>
-                  <div className="flex items-center gap-1">
-                    <span className={cn('text-[11px] font-medium', b.color)}>{b.status}</span>
-                    <ChevronRight className="w-3 h-3 text-slate-300" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+  if (!persona) {
+    return <div className="space-y-4 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-28 bg-slate-100 rounded-2xl"/>)}</div>
+  }
 
-          {/* Eligibility info */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-            <div className="flex items-start gap-2">
-              <Info className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-              <div className="space-y-1 text-[11px] text-slate-500">
-                <p><strong className="text-slate-700">Eligibility tier:</strong> Full Benefits (40 hrs/week)</p>
-                <p><strong className="text-slate-700">Carrier assignment:</strong> {e.state} state → {e.carrier} (auto-assigned)</p>
-                <p><strong className="text-slate-700">Coverage track:</strong> Fast-track · Coverage starts 1st of month after hire</p>
-                <p><strong className="text-slate-700">QLE window:</strong> 30 days from qualifying life event to make mid-year changes</p>
-              </div>
-            </div>
+  const tenureStr = tenure(persona.hireDate)
+  const oeIn = daysUntil(persona.openEnrollStart)
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-5">
+      {/* Welcome header */}
+      <div className="bg-[#1a2332] rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-transparent pointer-events-none" />
+        <div className="relative">
+          <p className="text-slate-400 text-sm">Welcome back,</p>
+          <h2 className="text-2xl font-bold mt-0.5">{persona.name}</h2>
+          <p className="text-slate-400 text-sm mt-1">{persona.title} · {persona.org}</p>
+          <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-slate-300">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Hired {new Date(persona.hireDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{tenureStr}</span>
+            {persona.state === 'ENROLLED' && persona.carrier && (
+              <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-red-400" />{persona.carrier} · {persona.planType}</span>
+            )}
+            {persona.state === 'ENROLLED' && (
+              <span className="flex items-center gap-1.5 text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" />Coverage Active</span>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Primary state card */}
+      {persona.state === 'WAITING'  && <WaitingBanner  persona={persona} />}
+      {persona.state === 'ELIGIBLE' && <EligibleBanner persona={persona} />}
+      {persona.state === 'ENROLLED' && <EnrolledBanner persona={persona} />}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <p className="text-xl font-bold text-slate-900">{tenureStr}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Tenure</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <p className={cn('text-xl font-bold',
+            persona.state === 'ENROLLED' ? 'text-emerald-600' :
+            persona.state === 'ELIGIBLE' ? 'text-blue-600' : 'text-amber-600')}>
+            {persona.state === 'WAITING' ? 'Waiting' : persona.state === 'ELIGIBLE' ? 'Eligible' : 'Active'}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Benefits status</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <p className="text-xl font-bold text-slate-900">{oeIn > 0 ? `${oeIn}d` : 'Open'}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Next open enrollment</p>
+          <p className="text-[10px] text-slate-400">Nov 1–30, 2026</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <p className="text-xl font-bold text-slate-900">
+            {persona.monthlyPremium ? `$${persona.monthlyPremium}/mo` : '—'}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Deduction</p>
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {persona.state !== 'WAITING' && (
+          <Link href="/enroll/dental" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all group">
+            <Stethoscope className="w-5 h-5 text-blue-600 mb-2" />
+            <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600">
+              {persona.state === 'ELIGIBLE' ? 'Enroll Now' : 'Dental Plan'}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{persona.state === 'ELIGIBLE' ? '30-day window open' : 'View / change'}</p>
+          </Link>
+        )}
+        <Link href="/enroll/estimator" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-violet-300 hover:shadow-sm transition-all group">
+          <TrendingUp className="w-5 h-5 text-violet-600 mb-2" />
+          <p className="text-sm font-semibold text-slate-900 group-hover:text-violet-600">Cost Estimator</p>
+          <p className="text-xs text-slate-500 mt-0.5">Dental procedures</p>
+        </Link>
+        <Link href="/inbox" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-amber-300 hover:shadow-sm transition-all group">
+          <Bell className="w-5 h-5 text-amber-600 mb-2" />
+          <p className="text-sm font-semibold text-slate-900 group-hover:text-amber-600">Inbox</p>
+          <p className="text-xs text-slate-500 mt-0.5">Tasks &amp; alerts</p>
+        </Link>
+        <Link href="/enroll" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-emerald-300 hover:shadow-sm transition-all group">
+          <Shield className="w-5 h-5 text-emerald-600 mb-2" />
+          <p className="text-sm font-semibold text-slate-900 group-hover:text-emerald-600">All Benefits</p>
+          <p className="text-xs text-slate-500 mt-0.5">Medical, vision, FSA</p>
+        </Link>
+      </div>
+
+      {persona.state === 'WAITING' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-800">
+            <strong>Plan Preview available.</strong> You can compare plans and estimate costs now.
+            Once eligible you&apos;ll have 30 days to enroll. &nbsp;
+            <Link href="/enroll/dental" className="underline font-medium">Preview plans →</Link>
+          </p>
+        </div>
+      )}
     </div>
   )
 }

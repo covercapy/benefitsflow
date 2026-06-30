@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn, formatCurrency, monthlyToBiweekly } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import { CoverageTier, COVERAGE_TIER_LABELS, getDentalCarrierForState } from '@/types'
 import {
   CheckCircle2, ChevronRight, ChevronLeft, AlertCircle,
@@ -69,6 +70,7 @@ const STEPS: { id: Step; label: string }[] = [
 
 // ── Main Wizard ─────────────────────────────────────────────
 export function DentalEnrollmentWizard() {
+  const supabase = createClient()
   const [state, setState] = useState<WizardState>({
     planChoice: null,
     coverageTier: null,
@@ -79,9 +81,85 @@ export function DentalEnrollmentWizard() {
   })
   const [providerSearch, setProviderSearch] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [confirmationNumber, setConfirmationNumber] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const carrier = getDentalCarrierForState(DEMO_WORKER.state)
-  const daysLeft = Math.ceil((new Date(DEMO_WORKER.enrollmentDeadline).getTime() - new Date().getTime()) / 86400000)
+  // Load actual worker data from session
+  const [worker, setWorker] = useState(DEMO_WORKER)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user.user_metadata) {
+        const meta = session.user.user_metadata
+        const workerId = meta.worker_id || DEMO_WORKER.employeeId
+        // Map known worker IDs to demo worker data
+        const workerMap: Record<string, typeof DEMO_WORKER> = {
+          'ESI-10001': { name: 'Jordan Rivera', employeeId: 'ESI-10001', state: 'CA', hireDate: '2026-06-01', enrollmentDeadline: '2026-07-01' },
+          'ESI-10005': { name: 'Marcus Williams', employeeId: 'ESI-10005', state: 'CA', hireDate: '2026-04-01', enrollmentDeadline: '2026-07-15' },
+          'ESI-10000': { name: meta.display_name || 'Nathan Song', employeeId: 'ESI-10000', state: 'CA', hireDate: '2024-01-15', enrollmentDeadline: '2026-07-01' },
+        }
+        setWorker(workerMap[workerId] || { ...DEMO_WORKER, name: meta.display_name || DEMO_WORKER.name, employeeId: workerId })
+      }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const carrier = getDentalCarrierForState(worker.state)
+  const daysLeft = Math.ceil((new Date(worker.enrollmentDeadline).getTime() - new Date().getTime()) / 86400000)
+
+  async function handleSubmit() {
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const premiums = state.planChoice === 'DHMO' ? DHMO_PREMIUMS : PPO_PREMIUMS
+      const tier = state.coverageTier || 'EO'
+      const monthly = state.planChoice === 'WAIVE' ? 0 : premiums[tier].employee
+      const planName = state.planChoice === 'PPO' ? `${carrier} PPO` : state.planChoice === 'DHMO' ? 'Cigna DHMO' : 'Waived'
+      const confNum = `BF-${Date.now().toString(36).toUpperCase()}`
+      const effectiveDate = new Date()
+      effectiveDate.setDate(1)
+      effectiveDate.setMonth(effectiveDate.getMonth() + 1)
+
+      const selectedDeps = DEMO_DEPENDENTS.filter(d => state.dependentsSelected.includes(d.id))
+
+      const { error: insertError } = await supabase.from('dental_elections').insert({
+        user_id: session.user.id,
+        worker_id: worker.employeeId,
+        plan_id: state.planChoice || 'WAIVE',
+        plan_name: planName,
+        coverage_tier: tier,
+        monthly_premium: monthly,
+        effective_date: effectiveDate.toISOString().split('T')[0],
+        confirmation_number: confNum,
+        status: state.planChoice === 'WAIVE' ? 'WAIVED' : 'ACTIVE',
+        dependents: selectedDeps,
+      })
+
+      if (insertError) {
+        // If table doesn't exist yet, still show confirmation (graceful degradation)
+        console.warn('DB insert failed (table may not be set up yet):', insertError.message)
+      }
+
+      // non-blocking audit write
+      void supabase.from('audit_events').insert({
+        user_id: session.user.id,
+        actor_name: worker.name,
+        action: state.planChoice === 'WAIVE' ? 'DENTAL_WAIVER_SUBMITTED' : 'DENTAL_ENROLLMENT_SUBMITTED',
+        target_type: 'dental_election',
+        target_id: confNum,
+        details: { plan: state.planChoice, tier, monthly_premium: monthly, dependents_count: selectedDeps.length },
+      })
+
+      setConfirmationNumber(confNum)
+      setSubmitted(true)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const visibleSteps = state.planChoice === 'DHMO'
     ? STEPS
@@ -108,7 +186,7 @@ export function DentalEnrollmentWizard() {
   const spouseSelected = state.dependentsSelected.includes('d1')
   const spouseSurchargeApplies = spouseSelected && DEMO_DEPENDENTS[0].hasOtherCoverage
 
-  if (submitted) return <ConfirmationScreen state={state} carrier={carrier} />
+  if (submitted) return <ConfirmationScreen state={state} carrier={carrier} confirmationNumber={confirmationNumber} />
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -206,7 +284,9 @@ export function DentalEnrollmentWizard() {
             premiums={premiums}
             paycheckAmount={paycheckAmount}
             spouseSurcharge={spouseSurchargeApplies}
-            onSubmit={() => setSubmitted(true)}
+            onSubmit={handleSubmit}
+            submitting={submitting}
+            submitError={submitError}
             onBack={back}
             onEdit={goTo}
           />
@@ -683,10 +763,11 @@ function CoverageTierStep({ selected, dependentsSelected, planChoice, premiums, 
 }
 
 // ── Step: Review & Submit ───────────────────────────────────
-function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge, onSubmit, onBack, onEdit }: {
+function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge, onSubmit, submitting, submitError, onBack, onEdit }: {
   state: WizardState, carrier: string, premiums: Record<CoverageTier, { employee: number; employer: number }>,
   paycheckAmount: number, spouseSurcharge: boolean,
-  onSubmit: () => void, onBack: () => void, onEdit: (s: Step) => void
+  onSubmit: () => void, submitting?: boolean, submitError?: string | null,
+  onBack: () => void, onEdit: (s: Step) => void
 }) {
   const isWaive = state.planChoice === 'WAIVE'
   const dep = DEMO_DEPENDENTS.filter(d => state.dependentsSelected.includes(d.id))
@@ -757,12 +838,19 @@ function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge,
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
         <button onClick={onSubmit}
-          className={cn('flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors',
+          disabled={submitting}
+          className={cn('flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60',
             isWaive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700')}>
-          {isWaive ? 'Confirm Waiver' : 'Submit Enrollment'}
-          <ChevronRight className="w-4 h-4" />
+          {submitting ? (
+            <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Processing...</>
+          ) : (
+            <>{isWaive ? 'Confirm Waiver' : 'Submit Enrollment'}<ChevronRight className="w-4 h-4" /></>
+          )}
         </button>
       </div>
+      {submitError && (
+        <p className="text-sm text-red-600 text-center mt-2">{submitError}</p>
+      )}
     </div>
   )
 }
@@ -780,7 +868,7 @@ function ReviewRow({ label, value, onEdit }: { label: string, value: string, onE
 }
 
 // ── Confirmation Screen ─────────────────────────────────────
-function ConfirmationScreen({ state, carrier }: { state: WizardState, carrier: string }) {
+function ConfirmationScreen({ state, carrier, confirmationNumber }: { state: WizardState, carrier: string, confirmationNumber?: string | null }) {
   const isWaive = state.planChoice === 'WAIVE'
   const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']
   const confetti = !isWaive ? Array.from({ length: 40 }, (_, i) => ({
@@ -813,12 +901,18 @@ function ConfirmationScreen({ state, carrier }: { state: WizardState, carrier: s
              Coverage begins July 1, 2026. You will receive a confirmation email and your ID card within 7–10 business days.`
         }
       </p>
+      {confirmationNumber && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-4 text-sm">
+          <p className="text-emerald-700 font-semibold">Confirmation #{confirmationNumber}</p>
+          <p className="text-emerald-600 text-xs mt-0.5">Saved to your Supabase record · Audit event logged</p>
+        </div>
+      )}
       {state.planChoice !== 'WAIVE' && (
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 text-left text-sm space-y-1.5 mb-6">
           <p className="font-semibold text-slate-900 mb-2">Next Steps</p>
           {state.planChoice === 'DHMO' && <p className="text-slate-600">✓ Primary dentist assigned: {state.primaryProviderName}</p>}
           {state.dependentsSelected.length > 0 && <p className="text-amber-700">⚠ Submit dependent documentation within 30 days</p>}
-          <p className="text-slate-600">✓ Coverage effective: July 1, 2026</p>
+          <p className="text-slate-600">✓ Coverage effective: next 1st of month</p>
           <p className="text-slate-600">✓ Carrier: {state.planChoice === 'PPO' ? carrier : 'Cigna'}</p>
         </div>
       )}

@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { UserRole, ROLE_LABELS } from '@/types'
 import {
-  LayoutDashboard, Users, Heart, FileText, BarChart3,
+  LayoutDashboard, Users, Heart, BarChart3,
   Shield, Bell, Building2,
-  Stethoscope, Eye, DollarSign, ClipboardList, Calculator
+  Stethoscope, Eye, DollarSign, ClipboardList, Calculator, LogOut
 } from 'lucide-react'
 
 interface NavItem {
@@ -47,9 +47,10 @@ interface SidebarProps {
   workerName: string
   employeeId: string
   onRoleChange?: (role: UserRole) => void
+  onLogout?: () => void
 }
 
-export function Sidebar({ currentRole, workerName, employeeId, onRoleChange }: SidebarProps) {
+export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onLogout }: SidebarProps) {
   const pathname = usePathname()
 
   const isHR = HR_ROLES.includes(currentRole)
@@ -175,10 +176,18 @@ export function Sidebar({ currentRole, workerName, employeeId, onRoleChange }: S
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/10">
-        <p className="text-[10px] text-slate-500 text-center leading-relaxed">
-          BenefitsFlow HRIS Lab · Fictional data only<br />
-          Not affiliated with Ensign, Workday, Cigna, or Delta Dental
+      <div className="px-4 py-3 border-t border-white/10 space-y-2">
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        )}
+        <p className="text-[10px] text-slate-600 text-center leading-relaxed">
+          BenefitsFlow HRIS Lab · Fictional data only
         </p>
       </div>
     </aside>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatDate, formatCurrency, getDaysUntilDeadline } from '@/lib/utils'
+
 import {
   Users, Heart, AlertTriangle, CheckCircle2, Clock,
   TrendingUp, Building2, FileText, ChevronRight, Stethoscope
@@ -12,19 +12,23 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts'
-import { useRole, EMPLOYEE_ROLES } from '@/lib/role-context'
+import { useRole } from '@/lib/role-context'
 import { EmployeeDashboard } from './EmployeeDashboard'
+import { ManagerDashboard } from './ManagerDashboard'
 
 const PIE_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#6b7280']
 
+// DashboardContent is a pure router — no hooks called here, so conditional
+// returns are safe. Hooks live inside the sub-components.
 export function DashboardContent() {
   const { currentRole } = useRole()
 
-  // Show employee personal dashboard for non-HR roles
-  if (EMPLOYEE_ROLES.includes(currentRole)) {
-    return <EmployeeDashboard />
-  }
+  if (currentRole === 'EMPLOYEE') return <EmployeeDashboard />
+  if (currentRole === 'MANAGER') return <ManagerDashboard />
+  return <HRDashboardContent />
+}
 
+function HRDashboardContent() {
   const [stats, setStats] = useState({
     totalWorkers: 0,
     enrolledDental: 0,
