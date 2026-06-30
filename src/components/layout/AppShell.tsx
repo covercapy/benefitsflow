@@ -216,6 +216,8 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
   }
 
   async function handleLogout() {
+    // Hit the server logout endpoint so bf_demo cookie is cleared alongside Supabase session
+    await fetch('/api/logout', { method: 'POST' }).catch(() => null)
     await supabase.auth.signOut()
     window.location.href = '/login'
   }

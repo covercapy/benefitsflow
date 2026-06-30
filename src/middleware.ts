@@ -2,7 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/api/init-demo']
+const PUBLIC_ROUTES = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/demo-accounts',
+  '/api/init-demo',
+  '/api/demo-login',
+  '/api/logout',
+]
 const HR_ONLY_PREFIXES = [
   '/audit', '/employees', '/invoices', '/organizations', '/payroll',
   '/processes', '/projects', '/reports', '/workers',

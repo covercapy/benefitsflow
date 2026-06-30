@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Heart, Shield, Users, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 const USERNAME_SHORTCUTS: Record<string, string> = {
@@ -276,7 +277,16 @@ export default function LoginPage() {
         )}
 
         {/* Disclaimer */}
-        <p className="text-center text-xs text-slate-600 mt-6">
+        {/* Auth links */}
+        <div className="flex items-center justify-center gap-4 mt-5 text-xs text-slate-500">
+          <Link href="/register" className="hover:text-slate-300 transition-colors">Create account</Link>
+          <span>·</span>
+          <Link href="/forgot-password" className="hover:text-slate-300 transition-colors">Forgot password?</Link>
+          <span>·</span>
+          <Link href="/demo-accounts" className="hover:text-slate-300 transition-colors">View demo accounts</Link>
+        </div>
+
+        <p className="text-center text-xs text-slate-600 mt-4">
           BenefitsFlow HRIS Lab · All data is fictional · Not affiliated with Ensign, Workday, Cigna, or Delta Dental
         </p>
       </div>

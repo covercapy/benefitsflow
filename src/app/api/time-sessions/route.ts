@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { currentPayPeriod } from '@/lib/pay-period'
+import { getAuthContext } from '@/lib/server-auth'
 
 const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('clock_in') }),
   z.object({ action: z.literal('clock_out'), session_id: z.string().uuid() }),
 ])
 
-async function getContext() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('worker_id, display_name, primary_role')
-    .eq('id', user.id)
-    .single()
-
-  return profile ? { supabase, user, profile } : null
-}
-
 export async function POST(request: NextRequest) {
-  const context = await getContext()
+  const context = await getAuthContext()
   if (!context) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = actionSchema.safeParse(await request.json().catch(() => null))
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const context = await getContext()
+  const context = await getAuthContext()
   if (!context) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
