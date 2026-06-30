@@ -114,6 +114,11 @@ const COLOR_MAP: Record<string, { card: string; badge: string; icon: string; rin
   },
 }
 
+// Username shortcuts — maps short usernames to demo personas with personal passwords
+const USERNAME_SHORTCUTS: Record<string, { email: string; password: string; personaId: string }> = {
+  nsong: { email: 'nsong@benefitsflow.demo', password: 'Poker50%', personaId: 'ESI-10000' },
+}
+
 // Cookie-based fallback session for when Supabase is unreachable
 function setDemoCookie(persona: typeof DEMO_PERSONAS[0]) {
   const payload = JSON.stringify({
@@ -182,6 +187,26 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading('manual')
     setError(null)
+
+    // Resolve username shortcuts (e.g. "nsong" → Nathan Song)
+    const rawInput = manualEmail.trim().toLowerCase()
+    const shortcut = USERNAME_SHORTCUTS[rawInput]
+    if (shortcut) {
+      if (manualPassword !== shortcut.password) {
+        setError('Invalid username or password')
+        setLoading(null)
+        return
+      }
+      // Find matching persona and cookie-login
+      const persona = DEMO_PERSONAS.find(p => p.employeeId === shortcut.personaId)
+      if (persona) {
+        setDemoCookie(persona)
+        window.location.href = '/dashboard'
+        return
+      }
+    }
+
+    // Standard email + password login
     try {
       const { error: signInError } = await withTimeout(
         supabase.auth.signInWithPassword({ email: manualEmail, password: manualPassword }),
@@ -294,7 +319,7 @@ export default function LoginPage() {
                 type="email"
                 value={manualEmail}
                 onChange={e => setManualEmail(e.target.value)}
-                placeholder="email@benefitsflow.demo"
+                placeholder="email@benefitsflow.demo or username"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />

@@ -6,6 +6,18 @@ import { NextResponse } from 'next/server'
 
 const DEMO_PASSWORD = 'BenefitsFlow2026!'
 
+// Accounts with custom passwords (personal logins outside the shared demo password)
+const PERSONAL_ACCOUNTS = [
+  {
+    email: 'nsong@benefitsflow.demo',
+    password: 'Poker50%',
+    role: 'HRIS_ANALYST',
+    worker_id: 'ESI-10000',
+    display_name: 'Nathan Song',
+    scenario: 'Personal login for Nathan Song — HRIS Analyst (full access)',
+  },
+]
+
 const DEMO_ACCOUNTS = [
   {
     email: 'hris.analyst@benefitsflow.demo',
@@ -66,12 +78,17 @@ export async function POST(request: Request) {
 
   const results: { email: string; status: string; error?: string }[] = []
 
-  for (const account of DEMO_ACCOUNTS) {
+  const allAccounts = [
+    ...DEMO_ACCOUNTS.map(a => ({ ...a, password: DEMO_PASSWORD })),
+    ...PERSONAL_ACCOUNTS,
+  ]
+
+  for (const account of allAccounts) {
     try {
       // Create auth user with role stored in metadata
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: account.email,
-        password: DEMO_PASSWORD,
+        password: (account as typeof allAccounts[number]).password,
         email_confirm: true,
         user_metadata: {
           role: account.role,
