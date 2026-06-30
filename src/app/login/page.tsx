@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Heart, Shield, Users, Stethoscope, Clock, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Heart, Shield, Users, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const DEMO_PERSONAS = [
@@ -15,7 +15,7 @@ const DEMO_PERSONAS = [
     scenario: 'Full system access · View As any role · Configure & audit',
     icon: Shield,
     color: 'violet',
-    badge: 'Admin',
+    badge: 'HRIS Admin',
   },
   {
     email: 'manager.maya@benefitsflow.demo',
@@ -23,7 +23,7 @@ const DEMO_PERSONAS = [
     role: 'Manager',
     roleKey: 'MANAGER',
     employeeId: 'ESI-10009',
-    scenario: '5 direct reports · Approvals · Onboarding oversight',
+    scenario: '5 direct reports · Approvals · Time & attendance oversight',
     icon: Users,
     color: 'emerald',
     badge: 'Manager',
@@ -34,43 +34,10 @@ const DEMO_PERSONAS = [
     role: 'Employee',
     roleKey: 'EMPLOYEE',
     employeeId: 'ESI-10001',
-    scenario: 'Active Cigna PPO · Annual max reached · 2 yr 5 mo tenure',
+    scenario: 'Active Cigna PPO · Clock in/out · PTO & benefits self-service',
     icon: CheckCircle2,
     color: 'blue',
-    badge: 'Enrolled',
-  },
-  {
-    email: 'newhire.waiting@benefitsflow.demo',
-    name: 'Elena Vasquez',
-    role: 'Employee',
-    roleKey: 'EMPLOYEE',
-    employeeId: 'ESI-10004',
-    scenario: 'Day 30 of 90-day wait · Preview available · Locked',
-    icon: Clock,
-    color: 'amber',
-    badge: 'Waiting',
-  },
-  {
-    email: 'newhire.eligible@benefitsflow.demo',
-    name: 'Marcus Williams',
-    role: 'Employee',
-    roleKey: 'EMPLOYEE',
-    employeeId: 'ESI-10005',
-    scenario: 'Enrollment window open · No elections yet · Transactional submit',
-    icon: Stethoscope,
-    color: 'sky',
-    badge: 'Eligible Now',
-  },
-  {
-    email: 'benefits.partner@benefitsflow.demo',
-    name: 'Taylor Chen',
-    role: 'Benefits Partner',
-    roleKey: 'BENEFITS_PARTNER',
-    employeeId: 'ESI-10002',
-    scenario: 'Eligibility exceptions · Life events · Carrier reconciliation',
-    icon: Heart,
-    color: 'rose',
-    badge: 'Benefits Ops',
+    badge: 'Employee',
   },
 ]
 
@@ -92,24 +59,6 @@ const COLOR_MAP: Record<string, { card: string; badge: string; icon: string; rin
     badge: 'bg-blue-100 text-blue-700',
     icon: 'bg-blue-100 text-blue-600',
     ring: 'ring-blue-400',
-  },
-  amber: {
-    card: 'border-amber-200 hover:border-amber-400 hover:bg-amber-50/50',
-    badge: 'bg-amber-100 text-amber-700',
-    icon: 'bg-amber-100 text-amber-600',
-    ring: 'ring-amber-400',
-  },
-  sky: {
-    card: 'border-sky-200 hover:border-sky-400 hover:bg-sky-50/50',
-    badge: 'bg-sky-100 text-sky-700',
-    icon: 'bg-sky-100 text-sky-600',
-    ring: 'ring-sky-400',
-  },
-  rose: {
-    card: 'border-rose-200 hover:border-rose-400 hover:bg-rose-50/50',
-    badge: 'bg-rose-100 text-rose-700',
-    icon: 'bg-rose-100 text-rose-600',
-    ring: 'ring-rose-400',
   },
 }
 
@@ -185,9 +134,9 @@ export default function LoginPage() {
       <div className="w-full max-w-4xl">
         {/* Heading */}
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-semibold text-white">Select a demo persona</h1>
+          <h1 className="text-2xl font-semibold text-white">Sign in to BenefitsFlow</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Each account is authenticated through Supabase Auth with role-scoped data access
+            Three roles · Supabase Auth · Real data · No mocks
           </p>
         </div>
 
@@ -199,7 +148,7 @@ export default function LoginPage() {
         )}
 
         {/* Persona cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-2xl mx-auto">
           {DEMO_PERSONAS.map(persona => {
             const colors = COLOR_MAP[persona.color]
             const Icon = persona.icon
