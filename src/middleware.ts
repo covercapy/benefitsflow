@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const PUBLIC_ROUTES = ['/login', '/api/init-demo']
+const HR_ONLY_PREFIXES = [
+  '/audit', '/employees', '/invoices', '/organizations', '/payroll',
+  '/processes', '/projects', '/reports', '/workers',
+]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -46,20 +50,26 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — this is the recommended Supabase pattern
-  const { data: { session } } = await supabase.auth.getSession()
+  // Validate the user with Supabase. Never trust unsigned client cookies or
+  // getSession() alone for server-side authorization.
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Fallback: accept bf_demo cookie when Supabase is unreachable
-  const demoCookie = request.cookies.get('bf_demo')?.value
-  let hasDemoSession = false
-  if (!session && demoCookie) {
+  // Demo cookie fallback — allows bf_demo cookie sessions (username shortcut logins,
+  // or when Supabase is unreachable) to pass through middleware.
+  let demoRole: string | null = null
+  if (!user) {
     try {
-      const payload = JSON.parse(decodeURIComponent(demoCookie))
-      hasDemoSession = payload?.exp > Date.now() && !!payload?.role
-    } catch { /* invalid cookie — ignore */ }
+      const raw = request.cookies.get('bf_demo')?.value
+      if (raw) {
+        const p = JSON.parse(decodeURIComponent(raw))
+        if (p?.worker_id && typeof p.exp === 'number' && p.exp > Date.now()) {
+          demoRole = p.role ?? null
+        }
+      }
+    } catch { /* malformed cookie — ignore */ }
   }
 
-  const isAuthed = !!session || hasDemoSession
+  const isAuthed = !!user || demoRole !== null
 
   // Root redirect
   if (pathname === '/') {
@@ -71,6 +81,25 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  // UI state never grants access. Resolve the authoritative database role
+  // before allowing HR operations routes.
+  if (HR_ONLY_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    let role: string | null = null
+    if (user) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('primary_role')
+        .eq('id', user.id)
+        .single()
+      role = profile?.primary_role ?? null
+    } else {
+      role = demoRole
+    }
+    if (!['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP'].includes(role || '')) {
+      return NextResponse.redirect(new URL('/dashboard?access=denied', request.url))
+    }
   }
 
   return response

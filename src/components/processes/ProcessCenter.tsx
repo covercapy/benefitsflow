@@ -314,8 +314,8 @@ export function ProcessCenter() {
                   </thead>
                   <tbody>
                     {[
-                      { worker: 'Elena Vasquez',  id: 'ESI-10003', step: 'Step 2: Employee: Elect Plans',           started: '2026-06-08', due: '2026-07-08' },
-                      { worker: 'Marcus Webb',    id: 'ESI-10012', step: 'Step 4: Benefits Partner: Verify Docs',    started: '2026-06-15', due: '2026-07-15' },
+                      { worker: 'Elena Vasquez',  id: 'ESI-10004', step: 'Step 4: Benefits Partner: Verify Docs',    started: '2026-06-15', due: '2026-07-15' },
+                      { worker: 'Maria Gonzalez', id: 'ESI-10015', step: 'Step 3: Benefits Partner: Review QLE',     started: '2026-06-14', due: '2026-07-14' },
                       { worker: 'Carmen Lopez',   id: 'ESI-10008', step: 'Step 2: Employee: Elect Plans',           started: '2026-06-01', due: '2026-07-01' },
                     ].slice(0, selected.activeInstances).map((inst, i) => (
                       <tr key={i} className="border-b border-slate-50 last:border-0">

@@ -1,18 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
   Users, CheckCircle2, Clock, AlertTriangle,
-  ChevronRight, Heart, Building2, Bell, Stethoscope
+  ChevronRight, Heart, Building2, Bell, Stethoscope, FileText
 } from 'lucide-react'
 
 interface TeamMember {
   name: string
   title: string
   workerId: string
+  hireDate: string
   enrollmentState: 'ENROLLED' | 'ELIGIBLE' | 'WAITING' | 'WAIVED'
   plan?: string
   tier?: string
@@ -20,12 +19,32 @@ interface TeamMember {
   daysUntilDeadline?: number
 }
 
+interface TimeException {
+  id: string
+  employeeName: string
+  type: string
+  date: string
+  detail: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+}
+
 const MAYA_TEAM: TeamMember[] = [
-  { name: 'Jordan Rivera',  title: 'HR Solutions Analyst', workerId: 'ESI-10001', enrollmentState: 'ENROLLED', plan: 'Cigna PPO Enhanced', tier: 'EF', premium: 189 },
-  { name: 'Elena Vasquez',  title: 'Registered Nurse',     workerId: 'ESI-10004', enrollmentState: 'WAITING', daysUntilDeadline: 61 },
-  { name: 'Marcus Williams',title: 'Registered Nurse',     workerId: 'ESI-10005', enrollmentState: 'ELIGIBLE', daysUntilDeadline: 29 },
-  { name: 'Chris Patel',    title: 'Medical Tech',          workerId: 'ESI-10006', enrollmentState: 'ENROLLED', plan: 'Cigna PPO Base',    tier: 'ES', premium: 94 },
-  { name: 'Lisa Tran',      title: 'Care Coordinator',     workerId: 'ESI-10007', enrollmentState: 'WAIVED' },
+  { name: 'Jordan Rivera',   title: 'HR Solutions Analyst', workerId: 'ESI-10001', hireDate: '2024-01-15', enrollmentState: 'ENROLLED',  plan: 'Cigna PPO Enhanced', tier: 'EF', premium: 189 },
+  { name: 'Elena Vasquez',   title: 'Registered Nurse',     workerId: 'ESI-10004', hireDate: '2026-06-01', enrollmentState: 'WAITING',   daysUntilDeadline: 61 },
+  { name: 'Marcus Williams', title: 'Registered Nurse',     workerId: 'ESI-10005', hireDate: '2026-03-31', enrollmentState: 'ELIGIBLE',  daysUntilDeadline: 29 },
+  { name: 'Chris Patel',     title: 'Medical Tech',         workerId: 'ESI-10006', hireDate: '2025-08-12', enrollmentState: 'ENROLLED',  plan: 'Cigna PPO Base',    tier: 'ES', premium: 94 },
+  { name: 'Lisa Tran',       title: 'Care Coordinator',     workerId: 'ESI-10007', hireDate: '2023-11-06', enrollmentState: 'WAIVED' },
+]
+
+const PENDING_TIME_EXCEPTIONS: TimeException[] = [
+  {
+    id: 'te-001',
+    employeeName: 'Marcus Williams',
+    type: 'Missed Clock-Out',
+    date: '2026-06-27',
+    detail: 'No clock-out recorded for 12-hr shift · System shows 8 hrs',
+    status: 'PENDING',
+  },
 ]
 
 const STATE_CONFIG = {
@@ -35,18 +54,14 @@ const STATE_CONFIG = {
   WAIVED:   { label: 'Waived',    bg: 'bg-slate-100',   text: 'text-slate-500',   icon: Heart },
 }
 
-export function ManagerDashboard() {
-  const supabase = createClient()
-  const [managerName, setManagerName] = useState('Maya Johnson')
-  const [org, setOrg] = useState('Sunrise Post-Acute Care')
+interface ManagerDashboardProps {
+  workerId: string
+  displayName: string
+}
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.user_metadata?.display_name) {
-        setManagerName(session.user.user_metadata.display_name)
-      }
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+export function ManagerDashboard({ workerId: _workerId, displayName }: ManagerDashboardProps) {
+  const managerName = displayName || 'Maya Johnson'
+  const org = 'Sunrise Post-Acute Care'
 
   const enrolled = MAYA_TEAM.filter(m => m.enrollmentState === 'ENROLLED').length
   const eligible = MAYA_TEAM.filter(m => m.enrollmentState === 'ELIGIBLE').length
@@ -115,16 +130,17 @@ export function ManagerDashboard() {
           {MAYA_TEAM.map(member => {
             const cfg = STATE_CONFIG[member.enrollmentState]
             const Icon = cfg.icon
+            const hireDateStr = new Date(member.hireDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             return (
               <div key={member.workerId} className="px-5 py-3.5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
                 {/* Avatar */}
                 <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
                   {member.name.split(' ').map(n => n[0]).join('')}
                 </div>
-                {/* Name + title */}
+                {/* Name + title + hire date */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900">{member.name}</p>
-                  <p className="text-xs text-slate-500">{member.title} · {member.workerId}</p>
+                  <p className="text-xs text-slate-500">{member.title} · Hired {hireDateStr}</p>
                 </div>
                 {/* Plan info */}
                 <div className="hidden sm:block text-right min-w-[120px]">
@@ -152,6 +168,51 @@ export function ManagerDashboard() {
         </div>
       </div>
 
+      {/* Time Exceptions */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900">Time Exceptions</h3>
+            {PENDING_TIME_EXCEPTIONS.length > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                {PENDING_TIME_EXCEPTIONS.length}
+              </span>
+            )}
+          </div>
+          <Link href="/processes" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            All exceptions <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+        {PENDING_TIME_EXCEPTIONS.length === 0 ? (
+          <div className="px-5 py-6 text-center text-sm text-slate-400">No pending time exceptions</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {PENDING_TIME_EXCEPTIONS.map(ex => (
+              <div key={ex.id} className="px-5 py-3.5 flex items-start gap-4 hover:bg-slate-50 transition-colors">
+                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900">{ex.employeeName}
+                    <span className="ml-2 text-xs font-normal text-slate-500">— {ex.type}</span>
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{ex.detail}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{new Date(ex.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button className="px-3 py-1 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
+                    Approve
+                  </button>
+                  <button className="px-3 py-1 text-xs font-semibold border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                    Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Quick actions */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Link href="/workers" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all group">
@@ -159,10 +220,13 @@ export function ManagerDashboard() {
           <p className="text-sm font-semibold text-slate-900 group-hover:text-blue-600">Team Directory</p>
           <p className="text-xs text-slate-500 mt-0.5">View all workers</p>
         </Link>
-        <Link href="/processes" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-violet-300 hover:shadow-sm transition-all group">
+        <Link href="/processes" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-violet-300 hover:shadow-sm transition-all group relative">
           <Bell className="w-5 h-5 text-violet-600 mb-2" />
-          <p className="text-sm font-semibold text-slate-900 group-hover:text-violet-600">Approvals</p>
-          <p className="text-xs text-slate-500 mt-0.5">Pending actions</p>
+          <p className="text-sm font-semibold text-slate-900 group-hover:text-violet-600 flex items-center gap-2">
+            Approvals
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold">1</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">1 pending action</p>
         </Link>
         <Link href="/reports" className="bg-white border border-slate-200 rounded-xl p-4 hover:border-emerald-300 hover:shadow-sm transition-all group">
           <Stethoscope className="w-5 h-5 text-emerald-600 mb-2" />

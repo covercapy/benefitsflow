@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { cn, formatCurrency, monthlyToBiweekly } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 import { CoverageTier, COVERAGE_TIER_LABELS, getDentalCarrierForState } from '@/types'
 import {
   CheckCircle2, ChevronRight, ChevronLeft, AlertCircle,
@@ -23,6 +22,28 @@ interface WizardState {
   step: Step
 }
 
+interface EnrollmentDependent {
+  id: string
+  name: string
+  relationship: string
+  dob: string
+  hasOtherCoverage: boolean
+}
+
+interface EnrollmentProvider {
+  id: string
+  name: string
+  practice: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  phone: string
+  accepting: boolean
+  languages: string[]
+  distance: string
+}
+
 // ── Constants ───────────────────────────────────────────────
 const DEMO_WORKER = {
   name: 'Jordan Rivera',
@@ -32,18 +53,18 @@ const DEMO_WORKER = {
   enrollmentDeadline: '2026-07-01',
 }
 
-const DEMO_DEPENDENTS = [
+const DEMO_DEPENDENTS: EnrollmentDependent[] = [
   { id: 'd1', name: 'Sarah Rivera', relationship: 'Spouse', dob: '1990-03-15', hasOtherCoverage: true },
   { id: 'd2', name: 'Emma Rivera', relationship: 'Child', dob: '2018-07-22', hasOtherCoverage: false },
   { id: 'd3', name: 'Noah Rivera', relationship: 'Child', dob: '2020-11-05', hasOtherCoverage: false },
 ]
 
-const DEMO_PROVIDERS = [
-  { id: 'p1', name: 'Dr. Maria Santos', practice: 'Sunshine Family Dental', address: '123 Pacific Ave', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0101', accepting: true, languages: ['English', 'Spanish'], distance: '0.4 mi' },
-  { id: 'p2', name: 'Dr. James Park', practice: 'OC Dental Group', address: '456 Crown Valley Pkwy', city: 'Laguna Niguel', state: 'CA', zip: '92677', phone: '949-555-0102', accepting: true, languages: ['English', 'Korean'], distance: '2.1 mi' },
-  { id: 'p3', name: 'Dr. Lisa Chen', practice: 'Coastal Smiles', address: '789 El Camino Real', city: 'San Clemente', state: 'CA', zip: '92672', phone: '949-555-0103', accepting: false, languages: ['English', 'Mandarin'], distance: '4.7 mi' },
-  { id: 'p4', name: 'Dr. Michael Nguyen', practice: 'Capistrano Dental Arts', address: '303 Ortega Hwy', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0106', accepting: true, languages: ['English', 'Vietnamese'], distance: '0.9 mi' },
-  { id: 'p5', name: 'Dr. Angela Torres', practice: 'South Orange County Dental', address: '202 Avenida Vista', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0105', accepting: true, languages: ['English', 'Spanish'], distance: '1.2 mi' },
+const DEMO_PROVIDERS: EnrollmentProvider[] = [
+  { id: 'f1000000-0000-0000-0000-000000000001', name: 'Dr. Maria Santos', practice: 'Sunshine Family Dental', address: '123 Pacific Ave', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0101', accepting: true, languages: ['English', 'Spanish'], distance: '0.4 mi' },
+  { id: 'f1000000-0000-0000-0000-000000000002', name: 'Dr. James Park', practice: 'OC Dental Group', address: '456 Crown Valley Pkwy', city: 'Laguna Niguel', state: 'CA', zip: '92677', phone: '949-555-0102', accepting: true, languages: ['English', 'Korean'], distance: '2.1 mi' },
+  { id: 'f1000000-0000-0000-0000-000000000003', name: 'Dr. Lisa Chen', practice: 'Coastal Smiles', address: '789 El Camino Real', city: 'San Clemente', state: 'CA', zip: '92672', phone: '949-555-0103', accepting: false, languages: ['English', 'Mandarin'], distance: '4.7 mi' },
+  { id: 'f1000000-0000-0000-0000-000000000006', name: 'Dr. Michael Nguyen', practice: 'Capistrano Dental Arts', address: '303 Ortega Hwy', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0106', accepting: true, languages: ['English', 'Vietnamese'], distance: '0.9 mi' },
+  { id: 'f1000000-0000-0000-0000-000000000005', name: 'Dr. Angela Torres', practice: 'South Orange County Dental', address: '202 Avenida Vista', city: 'San Juan Capistrano', state: 'CA', zip: '92675', phone: '949-555-0105', accepting: true, languages: ['English', 'Spanish'], distance: '1.2 mi' },
 ]
 
 const PPO_PREMIUMS: Record<CoverageTier, { employee: number; employer: number }> = {
@@ -70,7 +91,6 @@ const STEPS: { id: Step; label: string }[] = [
 
 // ── Main Wizard ─────────────────────────────────────────────
 export function DentalEnrollmentWizard() {
-  const supabase = createClient()
   const [state, setState] = useState<WizardState>({
     planChoice: null,
     coverageTier: null,
@@ -84,24 +104,45 @@ export function DentalEnrollmentWizard() {
   const [submitting, setSubmitting] = useState(false)
   const [confirmationNumber, setConfirmationNumber] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [dependents, setDependents] = useState<EnrollmentDependent[]>(DEMO_DEPENDENTS)
+  const [providers, setProviders] = useState<EnrollmentProvider[]>(DEMO_PROVIDERS)
 
-  // Load actual worker data from session
+  // Load the authenticated worker and their scoped enrollment data.
   const [worker, setWorker] = useState(DEMO_WORKER)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user.user_metadata) {
-        const meta = session.user.user_metadata
-        const workerId = meta.worker_id || DEMO_WORKER.employeeId
-        // Map known worker IDs to demo worker data
-        const workerMap: Record<string, typeof DEMO_WORKER> = {
-          'ESI-10001': { name: 'Jordan Rivera', employeeId: 'ESI-10001', state: 'CA', hireDate: '2026-06-01', enrollmentDeadline: '2026-07-01' },
-          'ESI-10005': { name: 'Marcus Williams', employeeId: 'ESI-10005', state: 'CA', hireDate: '2026-04-01', enrollmentDeadline: '2026-07-15' },
-          'ESI-10000': { name: meta.display_name || 'Nathan Song', employeeId: 'ESI-10000', state: 'CA', hireDate: '2024-01-15', enrollmentDeadline: '2026-07-01' },
-        }
-        setWorker(workerMap[workerId] || { ...DEMO_WORKER, name: meta.display_name || DEMO_WORKER.name, employeeId: workerId })
-      }
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    fetch('/api/enrollments/dental/context', { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject(new Error('Enrollment context unavailable')))
+      .then(context => {
+        setWorker({
+          name: `${context.worker.first_name} ${context.worker.last_name}`,
+          employeeId: context.worker.employee_id,
+          state: context.worker.work_state,
+          hireDate: context.worker.hire_date,
+          enrollmentDeadline: context.worker.enrollment_deadline,
+        })
+        setDependents(context.dependents.map((dependent: Record<string, unknown>) => ({
+          id: dependent.id as string,
+          name: `${dependent.first_name} ${dependent.last_name}`,
+          relationship: String(dependent.relationship).replaceAll('_', ' '),
+          dob: dependent.date_of_birth as string,
+          hasOtherCoverage: Boolean(dependent.has_other_employer_coverage),
+        })))
+        setProviders(context.providers.map((provider: Record<string, unknown>) => ({
+          id: provider.id as string,
+          name: provider.provider_name as string,
+          practice: (provider.practice_name as string) || '',
+          address: provider.address as string,
+          city: provider.city as string,
+          state: provider.state as string,
+          zip: provider.zip as string,
+          phone: (provider.phone as string) || '',
+          accepting: Boolean(provider.accepting_new_patients),
+          languages: (provider.languages as string[]) || ['English'],
+          distance: 'In network',
+        })))
+      })
+      .catch(() => setSubmitError('Connect Supabase and sign in to submit enrollment. Preview data is shown below.'))
+  }, [])
 
   const carrier = getDentalCarrierForState(worker.state)
   const daysLeft = Math.ceil((new Date(worker.enrollmentDeadline).getTime() - new Date().getTime()) / 86400000)
@@ -110,49 +151,20 @@ export function DentalEnrollmentWizard() {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-
-      const premiums = state.planChoice === 'DHMO' ? DHMO_PREMIUMS : PPO_PREMIUMS
-      const tier = state.coverageTier || 'EO'
-      const monthly = state.planChoice === 'WAIVE' ? 0 : premiums[tier].employee
-      const planName = state.planChoice === 'PPO' ? `${carrier} PPO` : state.planChoice === 'DHMO' ? 'Cigna DHMO' : 'Waived'
-      const confNum = `BF-${Date.now().toString(36).toUpperCase()}`
-      const effectiveDate = new Date()
-      effectiveDate.setDate(1)
-      effectiveDate.setMonth(effectiveDate.getMonth() + 1)
-
-      const selectedDeps = DEMO_DEPENDENTS.filter(d => state.dependentsSelected.includes(d.id))
-
-      const { error: insertError } = await supabase.from('dental_elections').insert({
-        user_id: session.user.id,
-        worker_id: worker.employeeId,
-        plan_id: state.planChoice || 'WAIVE',
-        plan_name: planName,
-        coverage_tier: tier,
-        monthly_premium: monthly,
-        effective_date: effectiveDate.toISOString().split('T')[0],
-        confirmation_number: confNum,
-        status: state.planChoice === 'WAIVE' ? 'WAIVED' : 'ACTIVE',
-        dependents: selectedDeps,
+      const response = await fetch('/api/enrollments/dental', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planChoice: state.planChoice,
+          coverageTier: state.planChoice === 'WAIVE' ? null : state.coverageTier,
+          providerId: state.planChoice === 'DHMO' ? state.primaryProvider : null,
+          dependentIds: state.dependentsSelected.filter(id => /^[0-9a-f-]{36}$/i.test(id)),
+        }),
       })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Enrollment transaction failed')
 
-      if (insertError) {
-        // If table doesn't exist yet, still show confirmation (graceful degradation)
-        console.warn('DB insert failed (table may not be set up yet):', insertError.message)
-      }
-
-      // non-blocking audit write
-      void supabase.from('audit_events').insert({
-        user_id: session.user.id,
-        actor_name: worker.name,
-        action: state.planChoice === 'WAIVE' ? 'DENTAL_WAIVER_SUBMITTED' : 'DENTAL_ENROLLMENT_SUBMITTED',
-        target_type: 'dental_election',
-        target_id: confNum,
-        details: { plan: state.planChoice, tier, monthly_premium: monthly, dependents_count: selectedDeps.length },
-      })
-
-      setConfirmationNumber(confNum)
+      setConfirmationNumber(result.confirmation_number)
       setSubmitted(true)
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.')
@@ -183,8 +195,11 @@ export function DentalEnrollmentWizard() {
   const monthlyEmployee = state.coverageTier ? premiums[state.coverageTier].employee : 0
   const paycheckAmount = monthlyToBiweekly(monthlyEmployee)
 
-  const spouseSelected = state.dependentsSelected.includes('d1')
-  const spouseSurchargeApplies = spouseSelected && DEMO_DEPENDENTS[0].hasOtherCoverage
+  const spouseSurchargeApplies = dependents.some(dependent =>
+    state.dependentsSelected.includes(dependent.id)
+    && ['SPOUSE', 'Spouse'].includes(dependent.relationship)
+    && dependent.hasOtherCoverage
+  )
 
   if (submitted) return <ConfirmationScreen state={state} carrier={carrier} confirmationNumber={confirmationNumber} />
 
@@ -197,9 +212,9 @@ export function DentalEnrollmentWizard() {
         'bg-blue-50 border-blue-200 text-blue-800')}>
         <AlertCircle className="w-4 h-4 shrink-0" />
         <span>
-          <strong>Enrollment deadline:</strong> {DEMO_WORKER.enrollmentDeadline} ·{' '}
+          <strong>Enrollment deadline:</strong> {worker.enrollmentDeadline} ·{' '}
           {daysLeft > 0 ? `${daysLeft} days remaining` : 'Deadline passed — contact HR'} ·{' '}
-          Your dental PPO carrier: <strong>{carrier}</strong> (based on {DEMO_WORKER.state} work state)
+          Your dental PPO carrier: <strong>{carrier}</strong> (based on {worker.state} work state)
         </span>
       </div>
 
@@ -236,7 +251,7 @@ export function DentalEnrollmentWizard() {
           <PlanStep
             choice={state.planChoice}
             carrier={carrier}
-            workState={DEMO_WORKER.state}
+            workState={worker.state}
             onChange={choice => setState(s => ({ ...s, planChoice: choice,
               step: choice === 'WAIVE' ? 'review' : choice === 'DHMO' ? 'provider' : 'dependents'
             }))}
@@ -247,7 +262,7 @@ export function DentalEnrollmentWizard() {
             selected={state.primaryProvider}
             search={providerSearch}
             onSearchChange={setProviderSearch}
-            providers={DEMO_PROVIDERS.filter(p =>
+            providers={providers.filter(p =>
               p.name.toLowerCase().includes(providerSearch.toLowerCase()) ||
               p.practice.toLowerCase().includes(providerSearch.toLowerCase()) ||
               p.city.toLowerCase().includes(providerSearch.toLowerCase())
@@ -259,7 +274,7 @@ export function DentalEnrollmentWizard() {
         )}
         {state.step === 'dependents' && (
           <DependentsStep
-            dependents={DEMO_DEPENDENTS}
+            dependents={dependents}
             selected={state.dependentsSelected}
             onChange={ids => setState(s => ({ ...s, dependentsSelected: ids }))}
             onNext={next}
@@ -270,6 +285,7 @@ export function DentalEnrollmentWizard() {
           <CoverageTierStep
             selected={state.coverageTier}
             dependentsSelected={state.dependentsSelected}
+            dependents={dependents}
             planChoice={state.planChoice!}
             premiums={premiums}
             onChange={tier => setState(s => ({ ...s, coverageTier: tier }))}
@@ -284,6 +300,7 @@ export function DentalEnrollmentWizard() {
             premiums={premiums}
             paycheckAmount={paycheckAmount}
             spouseSurcharge={spouseSurchargeApplies}
+            dependents={dependents}
             onSubmit={handleSubmit}
             submitting={submitting}
             submitError={submitError}
@@ -567,7 +584,7 @@ function ProviderStep({ selected, search, onSearchChange, providers, onSelect, o
 
 // ── Step: Dependents ────────────────────────────────────────
 function DependentsStep({ dependents, selected, onChange, onNext, onBack }: {
-  dependents: typeof DEMO_DEPENDENTS, selected: string[],
+  dependents: EnrollmentDependent[], selected: string[],
   onChange: (ids: string[]) => void, onNext: () => void, onBack: () => void
 }) {
   const [allDeps, setAllDeps] = useState(dependents)
@@ -707,13 +724,15 @@ function DependentsStep({ dependents, selected, onChange, onNext, onBack }: {
 }
 
 // ── Step: Coverage Tier ─────────────────────────────────────
-function CoverageTierStep({ selected, dependentsSelected, planChoice, premiums, onChange, onNext, onBack }: {
+function CoverageTierStep({ selected, dependentsSelected, dependents, planChoice, premiums, onChange, onNext, onBack }: {
   selected: CoverageTier | null, dependentsSelected: string[],
+  dependents: EnrollmentDependent[],
   planChoice: PlanChoice, premiums: Record<CoverageTier, { employee: number; employer: number }>,
   onChange: (t: CoverageTier) => void, onNext: () => void, onBack: () => void
 }) {
-  const hasSpouse = dependentsSelected.includes('d1')
-  const hasChildren = dependentsSelected.some(id => ['d2','d3'].includes(id))
+  const selectedDependents = dependents.filter(dependent => dependentsSelected.includes(dependent.id))
+  const hasSpouse = selectedDependents.some(dependent => ['SPOUSE', 'Spouse'].includes(dependent.relationship))
+  const hasChildren = selectedDependents.some(dependent => dependent.relationship.toUpperCase().includes('CHILD'))
 
   const suggestedTier: CoverageTier = hasSpouse && hasChildren ? 'EF'
     : hasSpouse ? 'ES'
@@ -763,15 +782,15 @@ function CoverageTierStep({ selected, dependentsSelected, planChoice, premiums, 
 }
 
 // ── Step: Review & Submit ───────────────────────────────────
-function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge, onSubmit, submitting, submitError, onBack, onEdit }: {
+function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge, dependents, onSubmit, submitting, submitError, onBack, onEdit }: {
   state: WizardState, carrier: string, premiums: Record<CoverageTier, { employee: number; employer: number }>,
   paycheckAmount: number, spouseSurcharge: boolean,
+  dependents: EnrollmentDependent[],
   onSubmit: () => void, submitting?: boolean, submitError?: string | null,
   onBack: () => void, onEdit: (s: Step) => void
 }) {
   const isWaive = state.planChoice === 'WAIVE'
-  const dep = DEMO_DEPENDENTS.filter(d => state.dependentsSelected.includes(d.id))
-  const surchargeAmount = spouseSurcharge ? monthlyToBiweekly(125 * 12 / 26 * 26 / 12) : 0 // $125/paycheck
+  const dep = dependents.filter(d => state.dependentsSelected.includes(d.id))
 
   return (
     <div className="p-6">

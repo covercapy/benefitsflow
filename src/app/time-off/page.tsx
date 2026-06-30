@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { Clock, Check, X, Plus, Calendar, LogIn, LogOut, Timer, AlertCircle, CloudOff, Cloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Punch { type: 'in' | 'out'; time: Date; label: string; synced: boolean }
@@ -44,30 +43,12 @@ function fmtDuration(ms: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
-/** Read worker_id + display_name from Supabase session or bf_demo cookie */
+/** Read authoritative worker identity from the server-validated session. */
 async function getWorkerIdentity(): Promise<{ worker_id: string; display_name: string }> {
-  try {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.user_metadata?.worker_id) {
-      return {
-        worker_id: session.user.user_metadata.worker_id,
-        display_name: session.user.user_metadata.display_name || 'Unknown',
-      }
-    }
-  } catch { /* fallthrough */ }
-
-  // Cookie fallback
-  const entry = document.cookie.split('; ').find(c => c.startsWith('bf_demo='))
-  if (entry) {
-    try {
-      const raw = entry.split('=').slice(1).join('=')
-      const p = JSON.parse(decodeURIComponent(raw))
-      if (p?.worker_id) return { worker_id: p.worker_id, display_name: p.display_name || 'Unknown' }
-    } catch { /* ignore */ }
-  }
-
-  return { worker_id: 'ESI-00000', display_name: 'Demo User' }
+  const response = await fetch('/api/session', { cache: 'no-store' })
+  if (!response.ok) throw new Error('Authenticated worker profile is required')
+  const { profile } = await response.json()
+  return { worker_id: profile.worker_id, display_name: profile.display_name }
 }
 
 // ─── Clock Widget ─────────────────────────────────────────────────────────────

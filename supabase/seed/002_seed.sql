@@ -185,17 +185,18 @@ INSERT INTO dental_procedure_codes (ada_code, description, category, service_cla
 ('D9940','Occlusal guard, by report','Adjunctive','MAJOR',NULL,0,450,750,100,'Night guard for bruxism');
 
 -- ============================================================
--- WORKERS (55 Fictional Employees)
+-- WORKERS (Fictional Demo Directory)
 -- ============================================================
 
 INSERT INTO workers (id, employee_id, first_name, last_name, email, hire_date, employment_type, avg_weekly_hours, employee_category, job_profile_id, organization_id, work_state, work_city, role) VALUES
 -- Service Center / HR Team (fast-track, CA)
+('91000000-0000-0000-0000-000000000000','ESI-10000','Nathan','Song','nathan.song@benefitsflow.demo','2024-01-15','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000013','a1000000-0000-0000-0000-000000000009','CA','San Juan Capistrano','HRIS_ANALYST'),
 ('91000000-0000-0000-0000-000000000001','ESI-10001','Jordan','Rivera','jordan.rivera@benefitsflow.demo','2026-06-01','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000009','CA','San Juan Capistrano','HRIS_ANALYST'),
 ('91000000-0000-0000-0000-000000000002','ESI-10002','Taylor','Chen','taylor.chen@benefitsflow.demo','2026-05-15','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000009','CA','San Juan Capistrano','BENEFITS_PARTNER'),
 ('91000000-0000-0000-0000-000000000003','ESI-10003','Morgan','Walsh','morgan.walsh@benefitsflow.demo','2025-03-10','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000003','a1000000-0000-0000-0000-000000000001','CA','San Juan Capistrano','HR_LEADERSHIP'),
 -- SJC Facility – Nurses (fast-track, CA)
 ('91000000-0000-0000-0000-000000000004','ESI-10004','Elena','Vasquez','elena.vasquez@benefitsflow.demo','2026-06-15','FULL_TIME',36,'FAST_TRACK','c1000000-0000-0000-0000-000000000004','a1000000-0000-0000-0000-000000000004','CA','San Juan Capistrano','EMPLOYEE'),
-('91000000-0000-0000-0000-000000000005','ESI-10005','Marcus','Williams','marcus.williams@benefitsflow.demo','2026-05-01','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000004','a1000000-0000-0000-0000-000000000004','CA','San Juan Capistrano','EMPLOYEE'),
+('91000000-0000-0000-0000-000000000005','ESI-10005','Marcus','Williams','marcus.williams@benefitsflow.demo','2026-06-15','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000004','a1000000-0000-0000-0000-000000000004','CA','San Juan Capistrano','EMPLOYEE'),
 ('91000000-0000-0000-0000-000000000006','ESI-10006','Priya','Sharma','priya.sharma@benefitsflow.demo','2026-04-20','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000004','a1000000-0000-0000-0000-000000000004','CA','San Juan Capistrano','EMPLOYEE'),
 ('91000000-0000-0000-0000-000000000007','ESI-10007','Dmitri','Petrov','dmitri.petrov@benefitsflow.demo','2026-03-01','FULL_TIME',40,'FAST_TRACK','c1000000-0000-0000-0000-000000000005','a1000000-0000-0000-0000-000000000004','CA','San Juan Capistrano','MANAGER'),
 -- SJC – Standard employees (dietary, housekeeping – 60-day wait)
@@ -257,8 +258,6 @@ INSERT INTO dental_elections (worker_id, plan_id, coverage_tier, effective_date,
 ('91000000-0000-0000-0000-000000000003','e1000000-0000-0000-0000-000000000002','ES','2026-04-01','ACTIVE','NEW_HIRE',NOW() - INTERVAL '80 days', NULL),
 -- Elena Vasquez – PPO Family (CA) – ortho case
 ('91000000-0000-0000-0000-000000000004','e1000000-0000-0000-0000-000000000002','EF','2026-07-01','ACTIVE','NEW_HIRE',NOW() - INTERVAL '5 days', NULL),
--- Marcus Williams – PPO Employee Only
-('91000000-0000-0000-0000-000000000005','e1000000-0000-0000-0000-000000000002','EO','2026-06-01','ACTIVE','NEW_HIRE',NOW() - INTERVAL '30 days', NULL),
 -- Priya Sharma – in progress
 ('91000000-0000-0000-0000-000000000006','e1000000-0000-0000-0000-000000000002','EF',NULL,'IN_PROGRESS','NEW_HIRE',NULL, NULL),
 -- Aisha Montgomery – Delta Dental PPO (OR)

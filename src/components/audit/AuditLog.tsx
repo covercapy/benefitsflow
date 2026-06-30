@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Search, ChevronDown, ChevronUp,
@@ -53,12 +53,12 @@ const AUDIT_DATA: AuditEntry[] = [
   {
     id: 'A003', timestamp: '2026-06-28T09:17:44Z',
     eventType: 'QLE',
-    worker: 'Marcus Webb', employeeId: 'ESI-10012',
-    performedBy: 'Marcus Webb', performedByRole: 'EMPLOYEE',
-    businessProcess: 'Benefits Event – QLE (Marriage)',
+    worker: 'Maria Gonzalez', employeeId: 'ESI-10015',
+    performedBy: 'Maria Gonzalez', performedByRole: 'EMPLOYEE',
+    businessProcess: 'Benefits Event – QLE (Birth)',
     object: 'QLE Event', field: 'status',
     oldValue: null, newValue: 'PENDING_REVIEW',
-    reason: 'Employee submitted marriage QLE with supporting document',
+    reason: 'Employee submitted birth QLE for Benefits Partner review',
     ipAddress: '10.0.0.55', sessionId: 'sess_wP9Mn',
   },
   {
@@ -75,7 +75,7 @@ const AUDIT_DATA: AuditEntry[] = [
   {
     id: 'A005', timestamp: '2026-06-27T11:30:00Z',
     eventType: 'ELIGIBILITY',
-    worker: 'Elena Vasquez', employeeId: 'ESI-10003',
+    worker: 'Elena Vasquez', employeeId: 'ESI-10004',
     performedBy: 'SYSTEM', performedByRole: 'SYSTEM',
     businessProcess: 'Onboarding – Eligibility Sync',
     object: 'Worker Eligibility', field: 'benefit_tier',
@@ -86,7 +86,7 @@ const AUDIT_DATA: AuditEntry[] = [
   {
     id: 'A006', timestamp: '2026-06-27T11:30:00Z',
     eventType: 'ELIGIBILITY',
-    worker: 'Elena Vasquez', employeeId: 'ESI-10003',
+    worker: 'Elena Vasquez', employeeId: 'ESI-10004',
     performedBy: 'SYSTEM', performedByRole: 'SYSTEM',
     businessProcess: 'Onboarding – Eligibility Sync',
     object: 'Worker Eligibility', field: 'enrollment_deadline',
@@ -130,7 +130,7 @@ const AUDIT_DATA: AuditEntry[] = [
   {
     id: 'A010', timestamp: '2026-06-08T09:01:05Z',
     eventType: 'ELIGIBILITY',
-    worker: 'Elena Vasquez', employeeId: 'ESI-10003',
+    worker: 'Elena Vasquez', employeeId: 'ESI-10004',
     performedBy: 'HR Onboarding Bot', performedByRole: 'SYSTEM',
     businessProcess: 'Onboarding – Worker Creation',
     object: 'Worker', field: 'worker_status',
@@ -152,12 +152,12 @@ const AUDIT_DATA: AuditEntry[] = [
   {
     id: 'A012', timestamp: '2026-05-15T14:10:22Z',
     eventType: 'DEPENDENT',
-    worker: 'Marcus Webb', employeeId: 'ESI-10012',
+    worker: 'Angela Davis', employeeId: 'ESI-10017',
     performedBy: 'Maria Santos', performedByRole: 'BENEFITS_PARTNER',
     businessProcess: 'Benefits Admin – Dependent Verification',
     object: 'Dependent', field: 'verification_status',
     oldValue: 'PENDING', newValue: 'VERIFIED',
-    reason: 'Marriage certificate received and approved. Diana Webb verified as spouse.',
+    reason: 'Disabled-dependent certification received and approved for Marcus Davis.',
     ipAddress: '10.0.1.12', sessionId: 'sess_bP3Rq',
   },
 ]
@@ -173,11 +173,58 @@ const EVENT_CONFIG: Record<EventType, { label: string; color: string; dot: strin
 }
 
 export function AuditLog() {
+  const [entries, setEntries] = useState<AuditEntry[]>(AUDIT_DATA)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<EventType | 'ALL'>('ALL')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const filtered = AUDIT_DATA.filter(entry => {
+  function exportCsv() {
+    const header = ['Timestamp','Event Type','Worker','Employee ID','Actor','Role','Object','Field','Old Value','New Value','Reason']
+    const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
+    const rows = filtered.map(entry => [entry.timestamp, entry.eventType, entry.worker, entry.employeeId, entry.performedBy, entry.performedByRole, entry.object, entry.field, entry.oldValue, entry.newValue, entry.reason].map(escape).join(','))
+    const url = URL.createObjectURL(new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `benefitsflow-audit-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  useEffect(() => {
+    fetch('/api/audit', { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(({ events }) => setEntries(events.map((event: any) => {
+        const actor = Array.isArray(event.workers) ? event.workers[0] : event.workers
+        const eventType: EventType = event.table_name === 'qle_events' ? 'QLE'
+          : event.table_name === 'dental_elections' ? 'ENROLLMENT'
+          : event.table_name === 'dependents' ? 'DEPENDENT'
+          : event.table_name.includes('eligibility') ? 'ELIGIBILITY'
+          : event.actor_role ? 'SYSTEM' : 'SYSTEM'
+        const changes = event.new_values || {}
+        const oldChanges = event.old_values || {}
+        const field = Object.keys(changes)[0] || 'record'
+        return {
+          id: event.id,
+          timestamp: event.created_at,
+          eventType,
+          worker: actor ? `${actor.first_name} ${actor.last_name}` : 'System',
+          employeeId: actor?.employee_id || '—',
+          performedBy: actor ? `${actor.first_name} ${actor.last_name}` : 'SYSTEM',
+          performedByRole: event.actor_role || 'SYSTEM',
+          businessProcess: event.table_name.replaceAll('_', ' '),
+          object: event.table_name,
+          field,
+          oldValue: oldChanges[field] == null ? null : String(oldChanges[field]),
+          newValue: changes[field] == null ? event.action : String(changes[field]),
+          reason: `${event.action} recorded by the operational audit layer`,
+          ipAddress: event.ip_address || 'server',
+          sessionId: event.session_id || 'authenticated',
+        }
+      })))
+      .catch(() => {})
+  }, [])
+
+  const filtered = entries.filter(entry => {
     const matchesType = typeFilter === 'ALL' || entry.eventType === typeFilter
     const matchesSearch = !search || [entry.worker, entry.employeeId, entry.object, entry.field, entry.newValue, entry.performedBy]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()))
@@ -190,11 +237,10 @@ export function AuditLog() {
       <div className="flex items-center gap-2 bg-slate-800 text-slate-200 rounded-xl px-4 py-3">
         <Lock className="w-4 h-4 text-slate-400 shrink-0" />
         <p className="text-xs">
-          <strong className="text-white">Immutable audit trail.</strong> All records are append-only and cryptographically stamped.
-          No entry can be modified or deleted after write. Retained 7 years per HIPAA/SOX requirements.
-          Export available for compliance review.
+          <strong className="text-white">Database-backed audit trail.</strong> Operational workflows append actor, action, object,
+          old/new values, and process context. Export is available for review.
         </p>
-        <button className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition-colors shrink-0">
+        <button onClick={exportCsv} className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition-colors shrink-0">
           <Download className="w-3 h-3" /> Export CSV
         </button>
       </div>
@@ -212,7 +258,7 @@ export function AuditLog() {
             <button key={t} onClick={() => setTypeFilter(t)}
               className={cn('text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors',
                 typeFilter === t ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400')}>
-              {t === 'ALL' ? `All (${AUDIT_DATA.length})` : EVENT_CONFIG[t as EventType].label}
+              {t === 'ALL' ? `All (${entries.length})` : EVENT_CONFIG[t as EventType].label}
             </button>
           ))}
         </div>
@@ -221,10 +267,10 @@ export function AuditLog() {
       {/* Summary stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total events', value: AUDIT_DATA.length },
-          { label: 'This month', value: AUDIT_DATA.filter(e => e.timestamp.startsWith('2026-06')).length },
-          { label: 'System events', value: AUDIT_DATA.filter(e => e.performedBy === 'SYSTEM').length },
-          { label: 'Manual changes', value: AUDIT_DATA.filter(e => e.performedBy !== 'SYSTEM').length },
+          { label: 'Total events', value: entries.length },
+          { label: 'This month', value: entries.filter(e => e.timestamp.slice(0, 7) === new Date().toISOString().slice(0, 7)).length },
+          { label: 'System events', value: entries.filter(e => e.performedBy === 'SYSTEM').length },
+          { label: 'Manual changes', value: entries.filter(e => e.performedBy !== 'SYSTEM').length },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
             <p className="text-xl font-bold text-slate-900">{s.value}</p>

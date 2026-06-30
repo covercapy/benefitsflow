@@ -80,10 +80,27 @@ const BENEFIT_ROWS = [
 export function VisionEnrollment() {
   const [selected, setSelected] = useState('vsp-ef')  // current election
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const selectedPlan = VISION_PLANS.find(p => p.id === selected)!
   const biweekly = (selectedPlan.monthly * 12 / 26).toFixed(2)
   const currentElection = 'vsp-ef'  // what they're currently on
+
+  async function saveElection() {
+    setSubmitting(true); setSubmitError(null)
+    try {
+      const response = await fetch('/api/enrollments/vision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: selectedPlan.tier }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Vision election failed')
+      setSubmitted(true)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Vision election failed')
+    } finally { setSubmitting(false) }
+  }
 
   if (submitted) {
     return (
@@ -169,10 +186,11 @@ export function VisionEnrollment() {
             </div>
           )}
 
-          <button onClick={() => setSubmitted(true)}
-            className="w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors">
-            {selected === currentElection ? 'Keep Current Election' : 'Save Vision Election'}
+          <button onClick={saveElection} disabled={submitting}
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50">
+            {submitting ? 'Saving…' : selected === currentElection ? 'Keep Current Election' : 'Save Vision Election'}
           </button>
+          {submitError && <p className="text-xs text-red-600">{submitError}</p>}
         </div>
 
         {/* Benefits comparison */}

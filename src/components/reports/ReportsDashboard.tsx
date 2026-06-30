@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn, formatCurrency } from '@/lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -63,11 +63,25 @@ const CARRIER_EXPORT_DETAIL = [
 // ── Component ────────────────────────────────────────────────
 export function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState<ReportTab>('enrollment')
+  const [enrollmentData, setEnrollmentData] = useState(ENROLLMENT_BY_ORG)
+  const [planData, setPlanData] = useState(PLAN_DISTRIBUTION)
+  const [accumulatorData, setAccumulatorData] = useState(ACCUMULATORS)
 
-  const totalEligible = ENROLLMENT_BY_ORG.reduce((s, r) => s + r.eligible, 0)
-  const totalEnrolled = ENROLLMENT_BY_ORG.reduce((s, r) => s + r.enrolled, 0)
-  const totalWaived = ENROLLMENT_BY_ORG.reduce((s, r) => s + r.waived, 0)
-  const totalNotStarted = ENROLLMENT_BY_ORG.reduce((s, r) => s + r.notStarted, 0)
+  useEffect(() => {
+    fetch('/api/reports/overview', { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(data => {
+        setEnrollmentData(data.enrollmentByOrg)
+        setPlanData(data.planDistribution)
+        setAccumulatorData(data.accumulators)
+      })
+      .catch(() => {})
+  }, [])
+
+  const totalEligible = enrollmentData.reduce((s, r) => s + r.eligible, 0)
+  const totalEnrolled = enrollmentData.reduce((s, r) => s + r.enrolled, 0)
+  const totalWaived = enrollmentData.reduce((s, r) => s + r.waived, 0)
+  const totalNotStarted = enrollmentData.reduce((s, r) => s + r.notStarted, 0)
   const enrollmentRate = Math.round((totalEnrolled / totalEligible) * 100)
 
   const TABS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
@@ -125,8 +139,8 @@ export function ReportsDashboard() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'enrollment' && <EnrollmentTab data={ENROLLMENT_BY_ORG} trend={ENROLLMENT_TREND} planDist={PLAN_DISTRIBUTION} />}
-      {activeTab === 'accumulators' && <AccumulatorsTab data={ACCUMULATORS} />}
+      {activeTab === 'enrollment' && <EnrollmentTab data={enrollmentData} trend={ENROLLMENT_TREND} planDist={planData} />}
+      {activeTab === 'accumulators' && <AccumulatorsTab data={accumulatorData} />}
       {activeTab === 'carrier' && <CarrierExportTab summary={CARRIER_EXPORT} detail={CARRIER_EXPORT_DETAIL} />}
       {activeTab === 'export' && <WaiverReportTab />}
     </div>

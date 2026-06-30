@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Heart, Shield, Users, Stethoscope, Clock, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -57,7 +56,7 @@ const DEMO_PERSONAS = [
     role: 'Employee',
     roleKey: 'EMPLOYEE',
     employeeId: 'ESI-10005',
-    scenario: 'Day 91 · Enrollment window open · No elections yet',
+    scenario: 'Enrollment window open · No elections yet · Transactional submit',
     icon: Stethoscope,
     color: 'sky',
     badge: 'Eligible Now',
@@ -114,23 +113,6 @@ const COLOR_MAP: Record<string, { card: string; badge: string; icon: string; rin
   },
 }
 
-// Username shortcuts — maps short usernames to demo personas with personal passwords
-const USERNAME_SHORTCUTS: Record<string, { email: string; password: string; personaId: string }> = {
-  nsong: { email: 'nsong@benefitsflow.demo', password: 'Poker50%', personaId: 'ESI-10000' },
-}
-
-// Cookie-based fallback session for when Supabase is unreachable
-function setDemoCookie(persona: typeof DEMO_PERSONAS[0]) {
-  const payload = JSON.stringify({
-    email: persona.email,
-    role: persona.roleKey,
-    worker_id: persona.employeeId,
-    display_name: persona.name,
-    exp: Date.now() + 8 * 60 * 60 * 1000, // 8h
-  })
-  document.cookie = `bf_demo=${encodeURIComponent(payload)}; path=/; max-age=28800; SameSite=Lax`
-}
-
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -141,7 +123,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -153,32 +134,18 @@ export default function LoginPage() {
   async function loginAs(email: string) {
     setLoading(email)
     setError(null)
-    const persona = DEMO_PERSONAS.find(p => p.email === email)!
     try {
-      await withTimeout(
-        supabase.auth.signInWithPassword({ email, password: 'BenefitsFlow2026!' }),
-        4000
-      )
-      // Supabase succeeded — set cookie too so AppShell can read it as fallback
-      setDemoCookie(persona)
+      const response = await withTimeout(fetch('/api/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }), 6000)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Demo login failed')
       window.location.href = '/dashboard'
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : ''
-      // On timeout or any connection error → cookie fallback
-      if (message === 'TIMEOUT' || message.includes('fetch') || message.includes('network') || message.includes('Failed')) {
-        setDemoCookie(persona)
-        window.location.href = '/dashboard'
-        return
-      }
-      // Real auth error
-      if (message.includes('Invalid login') || message.includes('Email not confirmed')) {
-        setError('Demo accounts not initialized. Run /api/init-demo first.')
-      } else {
-        // Unknown error → still fall back so demo works
-        setDemoCookie(persona)
-        window.location.href = '/dashboard'
-        return
-      }
+      const message = err instanceof Error ? err.message : 'Demo login failed'
+      setError(message === 'TIMEOUT' ? 'Demo login timed out. Check the Supabase connection.' : message)
       setLoading(null)
     }
   }
@@ -187,24 +154,6 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading('manual')
     setError(null)
-
-    // Resolve username shortcuts (e.g. "nsong" → Nathan Song)
-    const rawInput = manualEmail.trim().toLowerCase()
-    const shortcut = USERNAME_SHORTCUTS[rawInput]
-    if (shortcut) {
-      if (manualPassword !== shortcut.password) {
-        setError('Invalid username or password')
-        setLoading(null)
-        return
-      }
-      // Find matching persona and cookie-login
-      const persona = DEMO_PERSONAS.find(p => p.employeeId === shortcut.personaId)
-      if (persona) {
-        setDemoCookie(persona)
-        window.location.href = '/dashboard'
-        return
-      }
-    }
 
     // Standard email + password login
     try {
@@ -319,7 +268,7 @@ export default function LoginPage() {
                 type="email"
                 value={manualEmail}
                 onChange={e => setManualEmail(e.target.value)}
-                placeholder="email@benefitsflow.demo or username"
+                placeholder="email@benefitsflow.demo"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatDate, getDaysUntilDeadline, getDeadlineUrgency, getBenefitTierLabel, getInitials, cn } from '@/lib/utils'
 import { getDentalCarrierForState } from '@/types'
 import { Search, Filter, ChevronRight, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react'
@@ -36,7 +36,34 @@ const STATUS_CONFIG: Record<string, { label: string; class: string; icon: React.
 export function WorkersTable() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [workers, setWorkers] = useState(DEMO_WORKERS)
+  const [dataMode, setDataMode] = useState<'loading' | 'live' | 'preview'>('loading')
   const { currentRole } = useRole()
+
+  useEffect(() => {
+    fetch('/api/workers', { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(({ workers: rows }) => {
+        setWorkers(rows.map((row: Record<string, unknown>) => ({
+          id: row.employee_id as string,
+          employeeId: row.employee_id as string,
+          name: row.display_name as string,
+          title: (row.job_title as string) || '—',
+          org: (row.organization as string) || '—',
+          state: (row.work_state as string) || '—',
+          hireDate: row.hire_date as string,
+          category: (row.employee_category as string) || 'STANDARD',
+          tier: (row.benefit_tier as string) || 'CASUAL',
+          deadline: (row.enrollment_deadline as string) || '—',
+          dentalStatus: (row.dental_status as string) || 'NOT_STARTED',
+          dentalPlan: (row.dental_plan as string) || '—',
+          coverageTier: (row.dental_coverage_tier as string) || '—',
+          role: (row.security_role as string || 'EMPLOYEE').replaceAll(' ', '_'),
+        })))
+        setDataMode('live')
+      })
+      .catch(() => setDataMode('preview'))
+  }, [])
 
   // Role-based column visibility
   const showCarrier    = currentRole !== 'MANAGER'
@@ -46,8 +73,8 @@ export function WorkersTable() {
 
   // Managers only see their direct-report org
   const visibleWorkers = currentRole === 'MANAGER'
-    ? DEMO_WORKERS.filter(w => w.org === 'Sunrise Post-Acute Care')
-    : DEMO_WORKERS
+    ? workers.filter(w => w.org.includes('Sunrise Post-Acute Care'))
+    : workers
 
   const filtered = visibleWorkers.filter(w => {
     const matchSearch = search === '' ||
@@ -85,7 +112,7 @@ export function WorkersTable() {
             <option value="WAIVED">Waived</option>
           </select>
         </div>
-        <span className="text-xs text-slate-400">{filtered.length} workers</span>
+        <span className="text-xs text-slate-400">{filtered.length} workers · {dataMode === 'live' ? 'Live' : dataMode === 'loading' ? 'Loading' : 'Preview'}</span>
       </div>
 
       {/* Table */}

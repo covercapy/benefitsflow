@@ -18,13 +18,14 @@ import { ManagerDashboard } from './ManagerDashboard'
 
 const PIE_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#6b7280']
 
-// DashboardContent is a pure router — no hooks called here, so conditional
-// returns are safe. Hooks live inside the sub-components.
+// DashboardContent reads role + identity from context and routes to the
+// correct sub-dashboard. Sub-components receive identity via props so they
+// don't need their own /api/session fetches.
 export function DashboardContent() {
-  const { currentRole } = useRole()
+  const { currentRole, viewWorkerId, viewDisplayName } = useRole()
 
-  if (currentRole === 'EMPLOYEE') return <EmployeeDashboard />
-  if (currentRole === 'MANAGER') return <ManagerDashboard />
+  if (currentRole === 'EMPLOYEE') return <EmployeeDashboard workerId={viewWorkerId} displayName={viewDisplayName} />
+  if (currentRole === 'MANAGER') return <ManagerDashboard workerId={viewWorkerId} displayName={viewDisplayName} />
   return <HRDashboardContent />
 }
 

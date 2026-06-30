@@ -35,7 +35,9 @@ const SCENARIOS = [
 export function FSAEnrollment() {
   const [annualElection, setAnnualElection] = useState(CURRENT_ELECTION)
   const [submitted, setSubmitted] = useState(false)
-  const [_estimateAnnual, setEstimateAnnual] = useState(1800)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [expenseEstimates, setExpenseEstimates] = useState({ dental: 200, rx: 120, vision: 150, doctor: 300, other: 180 })
 
   const monthly = annualElection / 12
   const biweekly = (annualElection / 26).toFixed(2)
@@ -43,10 +45,27 @@ export function FSAEnrollment() {
 
   // Tax savings estimate (assume ~28% effective rate)
   const taxSavings = (annualElection * 0.28).toFixed(0)
+  const estimatedSpending = Object.values(expenseEstimates).reduce((sum, value) => sum + value, 0)
+  const recommendedElection = Math.min(IRS_LIMIT_2026, Math.ceil(estimatedSpending * 1.15 / 50) * 50)
 
   const clampElection = (val: number) => {
     const clamped = Math.max(0, Math.min(IRS_LIMIT_2026, val))
     setAnnualElection(Math.round(clamped / 50) * 50)  // round to $50 increments
+  }
+
+  async function saveElection() {
+    setSubmitting(true); setSubmitError(null)
+    try {
+      const response = await fetch('/api/enrollments/fsa', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ annualElection, planYear: 2027 }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'FSA election failed')
+      setSubmitted(true)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'FSA election failed')
+    } finally { setSubmitting(false) }
   }
 
   if (submitted) {
@@ -157,10 +176,11 @@ export function FSAEnrollment() {
             </div>
             <p className="text-[10px] text-slate-400 mt-2">*Estimated at 28% combined tax rate. Actual savings vary.</p>
 
-            <button onClick={() => setSubmitted(true)}
-              className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors">
-              Save 2027 FSA Election
+            <button onClick={saveElection} disabled={submitting}
+              className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50">
+              {submitting ? 'Saving…' : 'Save 2027 FSA Election'}
             </button>
+            {submitError && <p className="mt-2 text-xs text-red-600">{submitError}</p>}
           </div>
 
           {/* Important rules */}
@@ -205,12 +225,10 @@ export function FSAEnrollment() {
                     <span className="text-xs text-slate-400">$</span>
                     <input
                       type="number"
-                      defaultValue={item.default}
+                      value={expenseEstimates[item.key as keyof typeof expenseEstimates]}
                       min={0}
                       step={50}
-                      onChange={e => {
-                        // recalculate total in a real app
-                      }}
+                      onChange={e => setExpenseEstimates(previous => ({ ...previous, [item.key]: Math.max(0, Number(e.target.value)) }))}
                       className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
                     <span className="text-[10px] text-slate-400 shrink-0">/yr</span>
@@ -222,15 +240,15 @@ export function FSAEnrollment() {
             <div className="mt-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-700">Estimated annual spending</span>
-                <span className="text-lg font-bold text-emerald-700">$950</span>
+                <span className="text-lg font-bold text-emerald-700">${estimatedSpending.toLocaleString()}</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                Based on defaults above. Recommended election: <strong className="text-slate-600">$1,000–$1,200</strong> (add 15–20% buffer for unexpected expenses).
+                Based on your estimates. Recommended election: <strong className="text-slate-600">${recommendedElection.toLocaleString()}</strong> (includes a 15% buffer).
               </p>
               <button
-                onClick={() => setAnnualElection(1000)}
+                onClick={() => setAnnualElection(recommendedElection)}
                 className="mt-2 text-xs text-emerald-600 font-semibold hover:underline">
-                Apply $1,000 recommended → Election slider
+                Apply ${recommendedElection.toLocaleString()} recommended → Election slider
               </button>
             </div>
           </div>

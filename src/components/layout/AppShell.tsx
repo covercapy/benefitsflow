@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { UserRole } from '@/types'
 import { Bell, Search, HelpCircle, Sun, Moon } from 'lucide-react'
@@ -44,7 +43,7 @@ function AppShellInner({
   const bgCls = theme === 'dark' ? 'bg-slate-50' : 'bg-[#f8f7fc]'
 
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange }}>
+    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange, viewWorkerId: viewId, viewDisplayName: viewName }}>
     <div className={`flex min-h-screen ${bgCls}`}>
       <Sidebar
         currentRole={currentRole}
@@ -127,13 +126,10 @@ function AppShellInner({
 }
 
 export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
-  const router = useRouter()
   const supabase = createClient()
 
   // Session-derived identity
   const [sessionRole, setSessionRole] = useState<UserRole>('EMPLOYEE')
-  const [sessionName, setSessionName] = useState('Loading...')
-  const [sessionId, setSessionId] = useState('')
   const [isHrisAnalyst, setIsHrisAnalyst] = useState(false)
 
   // Current view role — HRIS Analyst can switch to "View As" other roles
@@ -143,43 +139,33 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
 
   useEffect(() => {
     async function loadSession() {
-      // Try Supabase session first
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (session) {
-        const meta = session.user.user_metadata
-        const role = (meta?.role as UserRole) || 'EMPLOYEE'
-        const name = meta?.display_name || session.user.email || 'User'
-        const workerId = meta?.worker_id || session.user.id.slice(0, 8).toUpperCase()
-        setSessionRole(role); setSessionName(name); setSessionId(workerId)
-        setIsHrisAnalyst(role === 'HRIS_ANALYST')
-        setCurrentRole(role); setViewName(name); setViewId(workerId)
+      let response: Response
+      try {
+        response = await fetch('/api/session', { cache: 'no-store' })
+      } catch {
+        // Network error — don't immediately boot; just show loading state
+        return
+      }
+      if (!response.ok) {
+        // Only redirect if we're sure the user isn't in cookie-session mode.
+        // Cookie sessions will now return 200 from /api/session after the fix.
+        // A genuine 401 here means truly unauthenticated.
+        window.location.href = '/login'
         return
       }
 
-      // Fallback: read bf_demo cookie (set when Supabase is unreachable)
-      const cookieEntry = document.cookie.split('; ').find(c => c.startsWith('bf_demo='))
-      if (cookieEntry) {
-        try {
-          const raw = cookieEntry.split('=').slice(1).join('=')
-          const payload = JSON.parse(decodeURIComponent(raw))
-          if (payload?.exp > Date.now() && payload?.role) {
-            const role = payload.role as UserRole
-            const name = payload.display_name || 'User'
-            const workerId = payload.worker_id || 'ESI-00000'
-            setSessionRole(role); setSessionName(name); setSessionId(workerId)
-            setIsHrisAnalyst(role === 'HRIS_ANALYST')
-            setCurrentRole(role); setViewName(name); setViewId(workerId)
-            return
-          }
-        } catch { /* bad cookie — fall through */ }
-      }
-
-      // No session at all
-      router.push('/login')
+      const { profile } = await response.json()
+      const role = profile.primary_role as UserRole
+      const name = profile.display_name as string
+      const workerId = profile.worker_id as string
+      setSessionRole(role)
+      setIsHrisAnalyst(role === 'HRIS_ANALYST')
+      setCurrentRole(role)
+      setViewName(name)
+      setViewId(workerId)
     }
-    loadSession()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    void loadSession()
+  }, [])
 
   function handleRoleChange(role: UserRole) {
     // Only HRIS Analyst can impersonate other roles
@@ -192,8 +178,6 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    // Clear demo cookie fallback
-    document.cookie = 'bf_demo=; path=/; max-age=0'
     window.location.href = '/login'
   }
 

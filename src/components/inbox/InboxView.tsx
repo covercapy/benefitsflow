@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn, formatDate } from '@/lib/utils'
 import {
   CheckCircle2, Clock, AlertTriangle, ChevronRight,
@@ -26,90 +26,6 @@ interface InboxTask {
   metadata?: Record<string, string>
 }
 
-const DEMO_TASKS: InboxTask[] = [
-  {
-    id: 'task-001',
-    type: 'QLE',
-    priority: 'HIGH',
-    status: 'PENDING',
-    title: 'QLE Approval Required – Marcus Webb',
-    description: 'Marcus Webb submitted a Qualifying Life Event (marriage) on 2026-06-15. Supporting documents uploaded. Review and approve to open a 30-day enrollment window.',
-    dueDate: '2026-07-15',
-    worker: 'Marcus Webb',
-    employeeId: 'ESI-10012',
-    actionLabel: 'Review QLE',
-    actionHref: '/inbox/qle/task-001',
-    metadata: { 'QLE Type': 'Marriage', 'Event Date': '2026-06-12', 'Documents': 'Marriage Certificate.pdf' },
-  },
-  {
-    id: 'task-002',
-    type: 'DOCUMENT',
-    priority: 'HIGH',
-    status: 'PENDING',
-    title: 'Dependent Verification – Jordan Rivera',
-    description: 'Dependent Sarah Rivera added during enrollment. Verification documents not yet received. Coverage will be suspended after 31 days without documentation.',
-    dueDate: '2026-07-01',
-    worker: 'Jordan Rivera',
-    employeeId: 'ESI-10001',
-    actionLabel: 'Upload Documents',
-    actionHref: '/inbox/docs/task-002',
-    metadata: { 'Dependent': 'Sarah Rivera (Spouse)', 'Doc Required': 'Marriage Certificate', 'Days Remaining': '2' },
-  },
-  {
-    id: 'task-003',
-    type: 'ENROLLMENT',
-    priority: 'MEDIUM',
-    status: 'PENDING',
-    title: 'New Hire Enrollment Pending – Elena Vasquez',
-    description: 'Elena Vasquez (hire date 2026-06-08) has not completed dental enrollment. Deadline: July 8, 2026. Auto-waiver will apply if no action is taken.',
-    dueDate: '2026-07-08',
-    worker: 'Elena Vasquez',
-    employeeId: 'ESI-10003',
-    actionLabel: 'Start Enrollment',
-    actionHref: '/enroll/dental',
-    metadata: { 'Hire Date': '2026-06-08', 'Deadline': '2026-07-08', 'Days Left': '9' },
-  },
-  {
-    id: 'task-004',
-    type: 'SYSTEM',
-    priority: 'LOW',
-    status: 'COMPLETED',
-    title: 'Carrier Export – Cigna File Accepted',
-    description: 'Monthly carrier data export for Cigna was processed successfully. 18 of 19 records accepted. 1 record rejected (missing dependent SSN – see Reports → Carrier Export Audit).',
-    dueDate: '2026-06-01',
-    worker: undefined,
-    actionLabel: 'View Report',
-    actionHref: '/reports',
-    metadata: { 'Export Date': '2026-06-01', 'Records': '19 sent / 18 accepted / 1 rejected', 'Carrier': 'Cigna' },
-  },
-  {
-    id: 'task-005',
-    type: 'DEPENDENT_VERIFICATION',
-    priority: 'MEDIUM',
-    status: 'IN_PROGRESS',
-    title: 'Age-Out Verification – Dependent Turning 26',
-    description: 'Dependent Lucas Webb (DOB 1999-07-22) will age out of coverage on his 26th birthday. Notify Marcus Webb to review coverage options before July 22.',
-    dueDate: '2026-07-22',
-    worker: 'Marcus Webb',
-    employeeId: 'ESI-10012',
-    actionLabel: 'Send Notice',
-    actionHref: '/inbox/age-out/task-005',
-    metadata: { 'Dependent': 'Lucas Webb', 'Age-Out Date': '2026-07-22', 'Days Remaining': '23' },
-  },
-  {
-    id: 'task-006',
-    type: 'ENROLLMENT',
-    priority: 'MEDIUM',
-    status: 'OVERDUE',
-    title: 'Annual Re-enrollment Reminder Overdue',
-    description: 'Open enrollment window closed June 1. 4 workers never elected coverage and will be auto-enrolled into the lowest-cost plan per Plan Rule 12.3.',
-    dueDate: '2026-06-01',
-    worker: undefined,
-    actionLabel: 'View Workers',
-    actionHref: '/workers',
-    metadata: { 'Affected Workers': '4', 'Auto-enroll Plan': 'Delta Dental PPO – Employee Only', 'Effective': '2026-07-01' },
-  },
-]
 
 const TYPE_CONFIG: Record<TaskType, { icon: React.ElementType; color: string; label: string }> = {
   ENROLLMENT: { icon: Heart, color: 'text-blue-600 bg-blue-50', label: 'Enrollment' },
@@ -138,6 +54,27 @@ function QLEForm({ onClose }: { onClose: () => void }) {
   const [qleType, setQleType] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  async function submitQle() {
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const response = await fetch('/api/qle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qleType, eventDate }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'QLE submission failed')
+      setSubmitted(true)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'QLE submission failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const QLE_TYPES = [
     { value: 'MARRIAGE', label: 'Marriage' },
@@ -222,10 +159,10 @@ function QLEForm({ onClose }: { onClose: () => void }) {
       {step === 3 && (
         <div className="space-y-4">
           <p className="text-sm font-medium text-slate-700">Upload supporting documentation</p>
-          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer group">
-            <Upload className="w-8 h-8 text-slate-300 group-hover:text-blue-400 mx-auto mb-2 transition-colors" />
-            <p className="text-sm text-slate-600 font-medium">Drop files here or click to browse</p>
-            <p className="text-xs text-slate-400 mt-1">Marriage certificate, birth certificate, COBRA letter, etc.</p>
+          <div className="border border-slate-200 bg-slate-50 rounded-xl p-5 text-center">
+            <Upload className="w-7 h-7 text-slate-400 mx-auto mb-2" />
+            <p className="text-sm text-slate-600 font-medium">Evidence task will be created after submission</p>
+            <p className="text-xs text-slate-400 mt-1">The Benefits Partner will request the required certificate or coverage notice.</p>
           </div>
           <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-500">
             <p className="font-medium text-slate-700 mb-1">Summary</p>
@@ -234,9 +171,12 @@ function QLEForm({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex gap-2">
             <button onClick={() => setStep(2)} className="flex-1 border border-slate-200 text-slate-700 text-sm py-2 rounded-lg hover:bg-slate-50">Back</button>
-            <button onClick={() => setSubmitted(true)}
-              className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-blue-700">Submit QLE</button>
+            <button onClick={submitQle} disabled={submitting}
+              className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {submitting ? 'Submitting…' : 'Submit QLE'}
+            </button>
           </div>
+          {submitError && <p className="text-xs text-red-600">{submitError}</p>}
         </div>
       )}
     </div>
@@ -247,8 +187,41 @@ export function InboxView() {
   const [filter, setFilter] = useState<'ALL' | TaskStatus>('ALL')
   const [showQLEForm, setShowQLEForm] = useState(false)
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [baseTasks, setBaseTasks] = useState<InboxTask[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const tasks = DEMO_TASKS.map(t => ({
+  useEffect(() => {
+    setLoading(true)
+    fetch('/api/inbox', { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(({ tasks }) => setBaseTasks(tasks.map((task: any) => {
+        const worker = Array.isArray(task.workers) ? task.workers[0] : task.workers
+        const due = task.due_date || new Date(task.created_at).toISOString().slice(0, 10)
+        const overdue = task.status !== 'COMPLETED' && new Date(due).getTime() < Date.now()
+        const type: TaskType = task.task_type?.includes('QLE') ? 'QLE'
+          : task.task_type?.includes('DOCUMENT') ? 'DOCUMENT'
+          : task.task_type?.includes('DEPENDENT') ? 'DEPENDENT_VERIFICATION'
+          : 'ENROLLMENT'
+        return {
+          id: task.id,
+          type,
+          priority: overdue ? 'HIGH' : 'MEDIUM',
+          status: overdue ? 'OVERDUE' : task.status,
+          title: task.title,
+          description: task.description || '',
+          dueDate: due,
+          worker: worker ? `${worker.first_name} ${worker.last_name}` : undefined,
+          employeeId: worker?.employee_id,
+          actionLabel: 'Open Task',
+          actionHref: '/inbox',
+          metadata: task.related_id ? { 'Related Record': task.related_id } : undefined,
+        }
+      })))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const tasks = baseTasks.map(t => ({
     ...t,
     status: completedIds.has(t.id) ? 'COMPLETED' as TaskStatus : t.status,
   }))
@@ -256,7 +229,14 @@ export function InboxView() {
   const filtered = filter === 'ALL' ? tasks : tasks.filter(t => t.status === filter)
   const pendingCount = tasks.filter(t => t.status === 'PENDING' || t.status === 'OVERDUE').length
 
-  const markComplete = (id: string) => {
+  const markComplete = async (id: string) => {
+    if (/^[0-9a-f-]{36}$/i.test(id)) {
+      const response = await fetch('/api/inbox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete', taskId: id }),
+      })
+      if (!response.ok) return
+    }
     setCompletedIds(prev => new Set([...prev, id]))
   }
 
@@ -307,13 +287,33 @@ export function InboxView() {
 
       {/* Task list */}
       <div className="space-y-3">
-        {filtered.length === 0 && (
+        {loading && (
+          <>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-100 rounded w-2/3" />
+                    <div className="h-3 bg-slate-100 rounded w-full" />
+                    <div className="h-3 bg-slate-100 rounded w-4/5" />
+                    <div className="h-3 bg-slate-100 rounded w-1/3 mt-3" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+        {!loading && filtered.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
-            <CheckCircle2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-sm text-slate-400">No tasks in this category</p>
+            <CheckCircle2 className="w-10 h-10 text-emerald-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-slate-600">No pending tasks</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {filter === 'ALL' ? 'Your inbox is clear — nothing needs attention right now.' : 'No tasks in this category.'}
+            </p>
           </div>
         )}
-        {filtered.map(task => {
+        {!loading && filtered.map(task => {
           const typeConfig = TYPE_CONFIG[task.type]
           const statusConfig = STATUS_CONFIG[task.status]
           const Icon = typeConfig.icon

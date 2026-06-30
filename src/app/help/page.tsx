@@ -15,7 +15,7 @@ const ARTICLES = [
 
 const FAQS = [
   { q: 'How do I reset a demo account?', a: 'Visit /api/init-demo (GET) for account info. POST with the admin secret to recreate accounts.' },
-  { q: 'What is the password for demo personas?', a: 'All demo accounts use password: BenefitsFlow2026! — just click any persona card on the login page.' },
+  { q: 'How do demo personas sign in?', a: 'Click a persona card. The server authenticates the seeded account without exposing its password to the browser.' },
   { q: 'Is this data real?', a: 'No — all data is 100% fictional. BenefitsFlow is a portfolio project not affiliated with Ensign Services, Workday, Cigna, or Delta Dental.' },
   { q: 'Who built this?', a: 'Nathan Song, HRIS Analyst candidate applying for the HR Solutions Analyst – Workday position at Ensign Services. Built to demonstrate real Workday HRIS skills.' },
   { q: 'What HR systems does this simulate?', a: 'BenefitsFlow simulates Workday HCM, ADP Workforce, and Paylocity patterns including Core HCM, Benefits Administration, Payroll Transparency, Business Processes, and Reporting.' },

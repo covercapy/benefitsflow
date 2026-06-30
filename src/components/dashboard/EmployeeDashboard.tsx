@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 import {
   Calendar, Heart, Clock, Shield,
   ChevronRight, AlertTriangle, CheckCircle2,
@@ -54,6 +53,17 @@ const PERSONAS: Record<string, PersonaConfig> = {
       { name: 'Sarah Rivera', rel: 'Spouse' },
       { name: 'Lily Rivera', rel: 'Child' },
       { name: 'Noah Rivera', rel: 'Child' },
+    ],
+    openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
+  },
+  'ESI-10000': {
+    name: 'Nathan Song', title: 'HRIS Analyst', org: 'Ensign Services, Inc.',
+    hireDate: '2022-03-14', waitingDays: 90, state: 'ENROLLED',
+    planName: 'Cigna Dental PPO Enhanced', planType: 'PPO',
+    coverageTier: 'ES', monthlyPremium: 94, carrier: 'Cigna',
+    annualUsed: 320, annualLimit: 1500,
+    dependents: [
+      { name: 'Amy Song', rel: 'Spouse' },
     ],
     openEnrollStart: '2026-11-01', openEnrollEnd: '2026-11-30',
   },
@@ -237,20 +247,25 @@ function EnrolledBanner({ persona }: { persona: PersonaConfig }) {
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
-export function EmployeeDashboard() {
-  const supabase = createClient()
-  const [persona, setPersona] = useState<PersonaConfig | null>(null)
+interface EmployeeDashboardProps {
+  workerId: string
+  displayName: string
+}
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const wid = session?.user?.user_metadata?.worker_id || 'ESI-10001'
-      setPersona(PERSONAS[wid] || PERSONAS['DEFAULT'])
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!persona) {
+export function EmployeeDashboard({ workerId, displayName }: EmployeeDashboardProps) {
+  // Derive persona from the worker_id passed down from session context.
+  // If workerId is not yet loaded (empty string), show loading skeleton.
+  if (!workerId) {
     return <div className="space-y-4 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-28 bg-slate-100 rounded-2xl"/>)}</div>
   }
+
+  // Look up the static persona config by worker_id; fall back to DEFAULT.
+  // Override the name with the live display_name from session so it stays
+  // accurate even for the DEFAULT catch-all case.
+  const basePersona = PERSONAS[workerId] || PERSONAS.DEFAULT
+  const persona: PersonaConfig = displayName
+    ? { ...basePersona, name: displayName }
+    : basePersona
 
   const tenureStr = tenure(persona.hireDate)
   const oeIn = daysUntil(persona.openEnrollStart)

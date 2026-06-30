@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { COVERAGE_TIER_LABELS, Worker, getDentalCarrierForState } from '@/types'
 import {
@@ -60,8 +60,8 @@ const DEMO_WORKERS: Record<string, DemoWorker> = {
     city: 'San Juan Capistrano',
     enrollment_deadline: undefined, coverageStartDate: '2024-02-01', enrollmentDeadline: null,
   },
-  'ESI-10003': {
-    id: '3', employee_id: 'ESI-10003', first_name: 'Elena', last_name: 'Vasquez',
+  'ESI-10004': {
+    id: '4', employee_id: 'ESI-10004', first_name: 'Elena', last_name: 'Vasquez',
     email: 'e.vasquez@vintage.example.com', employment_type: 'FULL_TIME',
     work_state: 'CA', worker_status: 'ACTIVE', benefit_tier: 'FULL', avg_weekly_hours: 40,
     hire_date: '2026-06-08', hireDate: '2026-06-08',
@@ -72,30 +72,30 @@ const DEMO_WORKERS: Record<string, DemoWorker> = {
     city: 'Laguna Hills',
     enrollment_deadline: '2026-07-08', coverageStartDate: null, enrollmentDeadline: '2026-07-08',
   },
-  'ESI-10012': {
-    id: '12', employee_id: 'ESI-10012', first_name: 'Marcus', last_name: 'Webb',
-    email: 'm.webb@cascade.example.com', employment_type: 'PART_TIME',
-    work_state: 'OR', worker_status: 'ACTIVE', benefit_tier: 'FULL', avg_weekly_hours: 32,
-    hire_date: '2023-09-01', hireDate: '2023-09-01',
-    employee_category: 'STANDARD', role: 'EMPLOYEE',
+  'ESI-10015': {
+    id: '15', employee_id: 'ESI-10015', first_name: 'Maria', last_name: 'Gonzalez',
+    email: 'maria.gonzalez@benefitsflow.demo', employment_type: 'FULL_TIME',
+    work_state: 'ID', worker_status: 'ACTIVE', benefit_tier: 'FULL', avg_weekly_hours: 40,
+    hire_date: '2026-05-20', hireDate: '2026-05-20',
+    employee_category: 'FAST_TRACK', role: 'EMPLOYEE',
     created_at: '', updated_at: '',
-    jobTitle: 'CNA – Certified Nursing Assistant', department: 'Nursing', org: 'Cascade Senior Living - OR',
-    supervisor: 'Danielle Park', workEmail: 'm.webb@cascade.example.com', phone: '(503) 555-0112',
-    city: 'Portland',
-    enrollment_deadline: undefined, coverageStartDate: '2023-10-01', enrollmentDeadline: null,
+    jobTitle: 'Registered Nurse', department: 'Clinical Care', org: 'Blue Ridge Care Center',
+    supervisor: 'Robert Johnson', workEmail: 'maria.gonzalez@benefitsflow.demo', phone: '(208) 555-0115',
+    city: 'Boise',
+    enrollment_deadline: '2026-07-14', coverageStartDate: '2026-06-01', enrollmentDeadline: '2026-07-14',
   },
 }
 
 const DEMO_ELECTIONS: Record<string, DemoElection> = {
   'ESI-10001': { status: 'ACTIVE', coverage_tier: 'EF', planName: 'Delta Dental PPO Enhanced', planType: 'PPO', monthlyPremium: 189, election_date: '2024-01-16' },
-  'ESI-10003': { status: 'IN_PROGRESS', coverage_tier: null, planName: null, planType: null, monthlyPremium: null, election_date: null },
-  'ESI-10012': { status: 'ACTIVE', coverage_tier: 'ES', planName: 'Delta Dental PPO Enhanced', planType: 'PPO', monthlyPremium: 127, election_date: '2023-09-02' },
+  'ESI-10004': { status: 'ACTIVE', coverage_tier: 'EF', planName: 'Cigna Dental PPO', planType: 'PPO', monthlyPremium: 28, election_date: '2026-06-20' },
+  'ESI-10015': { status: 'IN_PROGRESS', coverage_tier: null, planName: null, planType: null, monthlyPremium: null, election_date: null },
 }
 
 const DEMO_ACCUMULATORS: Record<string, DemoAccumulator> = {
   'ESI-10001': { deductible_used: 50, deductible_limit: 50, annual_used: 1500, annual_limit: 1500, ortho_used: 750, ortho_limit: 1500, plan_year: 2026, planYear: 2026, annualMaxAmt: 1500 },
-  'ESI-10003': { deductible_used: 0, deductible_limit: 50, annual_used: 0, annual_limit: 1500, ortho_used: 0, ortho_limit: 1500, plan_year: 2026, planYear: 2026, annualMaxAmt: 1500 },
-  'ESI-10012': { deductible_used: 50, deductible_limit: 50, annual_used: 480, annual_limit: 1500, ortho_used: 0, ortho_limit: 1500, plan_year: 2026, planYear: 2026, annualMaxAmt: 1500 },
+  'ESI-10004': { deductible_used: 50, deductible_limit: 50, annual_used: 1500, annual_limit: 1500, ortho_used: 750, ortho_limit: 1500, plan_year: 2026, planYear: 2026, annualMaxAmt: 1500 },
+  'ESI-10015': { deductible_used: 0, deductible_limit: 50, annual_used: 0, annual_limit: 1500, ortho_used: 0, ortho_limit: 1500, plan_year: 2026, planYear: 2026, annualMaxAmt: 1500 },
 }
 
 const DEMO_DEPENDENTS: Record<string, { name: string; rel: string; dob: string; covered: boolean }[]> = {
@@ -104,10 +104,13 @@ const DEMO_DEPENDENTS: Record<string, { name: string; rel: string; dob: string; 
     { name: 'Lily Rivera', rel: 'Child', dob: '2015-07-22', covered: true },
     { name: 'Noah Rivera', rel: 'Child', dob: '2018-11-05', covered: true },
   ],
-  'ESI-10003': [],
-  'ESI-10012': [
-    { name: 'Diana Webb', rel: 'Spouse', dob: '1982-09-30', covered: true },
-    { name: 'Lucas Webb', rel: 'Child', dob: '1999-07-22', covered: true },
+  'ESI-10004': [
+    { name: 'Carlos Vasquez', rel: 'Child', dob: '2012-04-10', covered: true },
+    { name: 'Isabella Vasquez', rel: 'Child', dob: '2015-09-18', covered: true },
+  ],
+  'ESI-10015': [
+    { name: 'Diego Gonzalez', rel: 'Spouse', dob: '1988-12-01', covered: true },
+    { name: 'Luna Gonzalez', rel: 'Child', dob: '2019-05-14', covered: true },
   ],
 }
 
@@ -136,10 +139,59 @@ function AccBar({ used, limit, label, color = 'blue' }: { used: number; limit: n
 }
 
 export function WorkerDetail({ employeeId }: { employeeId: string }) {
-  const worker = DEMO_WORKERS[employeeId]
-  const election = DEMO_ELECTIONS[employeeId]
-  const accumulators = DEMO_ACCUMULATORS[employeeId]
-  const dependents = DEMO_DEPENDENTS[employeeId] || []
+  const [worker, setWorker] = useState<DemoWorker | undefined>(DEMO_WORKERS[employeeId])
+  const [election, setElection] = useState<DemoElection | undefined>(DEMO_ELECTIONS[employeeId])
+  const [accumulators, setAccumulators] = useState<DemoAccumulator | undefined>(DEMO_ACCUMULATORS[employeeId])
+  const [dependents, setDependents] = useState(DEMO_DEPENDENTS[employeeId] || [])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/workers/${encodeURIComponent(employeeId)}`, { cache: 'no-store' })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(({ worker: row, election: elect, accumulator, dependents: deps }) => {
+        setWorker({
+          ...row,
+          hireDate: row.hire_date,
+          jobTitle: row.job_profiles?.title || '—',
+          department: row.job_profiles?.job_families?.name || '—',
+          org: row.organizations?.name || '—',
+          supervisor: 'See supervisory organization',
+          workEmail: row.email,
+          city: row.work_city || '',
+          coverageStartDate: row.coverage_start_date,
+          enrollmentDeadline: row.enrollment_deadline,
+        })
+        setElection(elect ? {
+          status: elect.enrollment_status,
+          coverage_tier: elect.coverage_tier,
+          planName: elect.dental_plans?.plan_name || null,
+          planType: elect.dental_plans?.plan_type || null,
+          monthlyPremium: elect.employee_monthly || null,
+          election_date: elect.submitted_at || null,
+        } : undefined)
+        setAccumulators(accumulator ? {
+          deductible_used: Number(accumulator.deductible_individual_used || 0),
+          deductible_limit: Number(elect?.dental_plans?.deductible_individual || 0),
+          annual_used: Number(accumulator.annual_max_used || 0),
+          annual_limit: Number(elect?.dental_plans?.calendar_year_max || 0),
+          ortho_used: Number(accumulator.ortho_lifetime_used || 0),
+          ortho_limit: Number(elect?.dental_plans?.ortho_lifetime_max || 0),
+          plan_year: accumulator.plan_year,
+          planYear: accumulator.plan_year,
+          annualMaxAmt: Number(elect?.dental_plans?.calendar_year_max || 0),
+        } : undefined)
+        setDependents(deps.map((dependent: Record<string, string>) => ({
+          name: `${dependent.first_name} ${dependent.last_name}`,
+          rel: dependent.relationship.replaceAll('_', ' '),
+          dob: dependent.date_of_birth,
+          covered: dependent.doc_status === 'VERIFIED',
+        })))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [employeeId])
+
+  if (loading && !worker) return <div className="py-16 text-center text-sm text-slate-500">Loading worker…</div>
 
   if (!worker) {
     return (
