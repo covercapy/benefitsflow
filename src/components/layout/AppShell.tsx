@@ -41,26 +41,40 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
 
   useEffect(() => {
     async function loadSession() {
+      // Try Supabase session first
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        router.push('/login')
+
+      if (session) {
+        const meta = session.user.user_metadata
+        const role = (meta?.role as UserRole) || 'EMPLOYEE'
+        const name = meta?.display_name || session.user.email || 'User'
+        const workerId = meta?.worker_id || session.user.id.slice(0, 8).toUpperCase()
+        setSessionRole(role); setSessionName(name); setSessionId(workerId)
+        setIsHrisAnalyst(role === 'HRIS_ANALYST')
+        setCurrentRole(role); setViewName(name); setViewId(workerId)
         return
       }
 
-      const meta = session.user.user_metadata
-      const role = (meta?.role as UserRole) || 'EMPLOYEE'
-      const name = meta?.display_name || session.user.email || 'User'
-      const workerId = meta?.worker_id || session.user.id.slice(0, 8).toUpperCase()
+      // Fallback: read bf_demo cookie (set when Supabase is unreachable)
+      const cookieEntry = document.cookie.split('; ').find(c => c.startsWith('bf_demo='))
+      if (cookieEntry) {
+        try {
+          const raw = cookieEntry.split('=').slice(1).join('=')
+          const payload = JSON.parse(decodeURIComponent(raw))
+          if (payload?.exp > Date.now() && payload?.role) {
+            const role = payload.role as UserRole
+            const name = payload.display_name || 'User'
+            const workerId = payload.worker_id || 'ESI-00000'
+            setSessionRole(role); setSessionName(name); setSessionId(workerId)
+            setIsHrisAnalyst(role === 'HRIS_ANALYST')
+            setCurrentRole(role); setViewName(name); setViewId(workerId)
+            return
+          }
+        } catch { /* bad cookie — fall through */ }
+      }
 
-      setSessionRole(role)
-      setSessionName(name)
-      setSessionId(workerId)
-      setIsHrisAnalyst(role === 'HRIS_ANALYST')
-
-      // Default view = own role (HRIS Analyst can switch later)
-      setCurrentRole(role)
-      setViewName(name)
-      setViewId(workerId)
+      // No session at all
+      router.push('/login')
     }
     loadSession()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -76,8 +90,9 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    // Clear demo cookie fallback
+    document.cookie = 'bf_demo=; path=/; max-age=0'
+    window.location.href = '/login'
   }
 
   return (

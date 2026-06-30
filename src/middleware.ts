@@ -49,16 +49,25 @@ export async function middleware(request: NextRequest) {
   // Refresh session — this is the recommended Supabase pattern
   const { data: { session } } = await supabase.auth.getSession()
 
+  // Fallback: accept bf_demo cookie when Supabase is unreachable
+  const demoCookie = request.cookies.get('bf_demo')?.value
+  let hasDemoSession = false
+  if (!session && demoCookie) {
+    try {
+      const payload = JSON.parse(decodeURIComponent(demoCookie))
+      hasDemoSession = payload?.exp > Date.now() && !!payload?.role
+    } catch { /* invalid cookie — ignore */ }
+  }
+
+  const isAuthed = !!session || hasDemoSession
+
   // Root redirect
   if (pathname === '/') {
-    if (session) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL(isAuthed ? '/dashboard' : '/login', request.url))
   }
 
   // Protected routes — must be authenticated
-  if (!session) {
+  if (!isAuthed) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
