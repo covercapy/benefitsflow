@@ -160,7 +160,7 @@ export function DentalEnrollmentWizard() {
             carrier={carrier}
             workState={DEMO_WORKER.state}
             onChange={choice => setState(s => ({ ...s, planChoice: choice,
-              step: choice === 'WAIVE' ? 'review' : 'provider' in visibleSteps.map(x=>x.id) ? (choice === 'DHMO' ? 'provider' : 'dependents') : 'dependents'
+              step: choice === 'WAIVE' ? 'review' : choice === 'DHMO' ? 'provider' : 'dependents'
             }))}
           />
         )}
@@ -223,6 +223,15 @@ function PlanStep({ choice, carrier, workState, onChange }: {
   workState: string
   onChange: (c: PlanChoice) => void
 }) {
+  const [calcTier, setCalcTier] = useState<CoverageTier>('EF')
+
+  const tiers: { tier: CoverageTier; label: string }[] = [
+    { tier: 'EO', label: 'Just me' },
+    { tier: 'ES', label: 'Me + Spouse' },
+    { tier: 'EC', label: 'Me + Child(ren)' },
+    { tier: 'EF', label: 'Family' },
+  ]
+
   return (
     <div className="p-6">
       <h2 className="text-base font-semibold text-slate-900 mb-1">Select Your Dental Plan</h2>
@@ -262,6 +271,47 @@ function PlanStep({ choice, carrier, workState, onChange }: {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Cost calculator */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Calculator className="w-4 h-4 text-blue-600" />
+          <p className="text-sm font-semibold text-slate-800">Cost Calculator — Who are you covering?</p>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {tiers.map(({ tier, label }) => (
+            <button key={tier} onClick={() => setCalcTier(tier)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                calcTier === tier ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { id: 'PPO', label: `PPO · ${carrier}`, premiums: PPO_PREMIUMS, color: 'blue' },
+            { id: 'DHMO', label: 'DHMO · Cigna', premiums: DHMO_PREMIUMS, color: 'teal' },
+            { id: 'WAIVE', label: 'Waive', premiums: null, color: 'slate' },
+          ].map(plan => {
+            const monthly = plan.premiums ? plan.premiums[calcTier].employee : 0
+            const biweekly = monthlyToBiweekly(monthly)
+            const employer = plan.premiums ? plan.premiums[calcTier].employer : 0
+            return (
+              <div key={plan.id} className={cn('rounded-lg border bg-white p-3',
+                plan.color === 'blue' ? 'border-blue-200' : plan.color === 'teal' ? 'border-teal-200' : 'border-slate-200')}>
+                <p className="text-xs font-medium text-slate-500 mb-2">{plan.label}</p>
+                <p className={cn('text-xl font-bold', plan.color === 'blue' ? 'text-blue-700' : plan.color === 'teal' ? 'text-teal-700' : 'text-slate-400')}>
+                  {plan.premiums ? `$${monthly.toFixed(2)}` : '$0.00'}
+                  <span className="text-xs font-normal text-slate-400">/mo</span>
+                </p>
+                <p className="text-xs text-slate-400">${biweekly.toFixed(2)}/paycheck</p>
+                {plan.premiums && <p className="text-xs text-emerald-600 mt-1">+${employer.toFixed(2)} employer</p>}
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-slate-400 mt-2">* Sample rates for illustration. 26 pay periods/year. Employer contribution not deducted from paycheck.</p>
       </div>
 
       {/* Plan cards */}
@@ -652,8 +702,25 @@ function ReviewRow({ label, value, onEdit }: { label: string, value: string, onE
 
 // ── Confirmation Screen ─────────────────────────────────────
 function ConfirmationScreen({ state, carrier }: { state: WizardState, carrier: string }) {
+  const isWaive = state.planChoice === 'WAIVE'
+  const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']
+  const confetti = !isWaive ? Array.from({ length: 40 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    color: colors[i % colors.length],
+    delay: `${Math.random() * 1.5}s`,
+    size: `${6 + Math.random() * 8}px`,
+  })) : []
+
   return (
-    <div className="max-w-xl mx-auto text-center py-12">
+    <div className="max-w-xl mx-auto text-center py-12 relative overflow-hidden">
+      {/* Confetti */}
+      {confetti.map(c => (
+        <div key={c.id} className="absolute top-0 pointer-events-none animate-bounce"
+          style={{ left: c.left, animationDelay: c.delay, animationDuration: `${1 + Math.random()}s` }}>
+          <div style={{ width: c.size, height: c.size, backgroundColor: c.color, borderRadius: '2px', opacity: 0.8 }} />
+        </div>
+      ))}
       <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <CheckCircle2 className="w-8 h-8 text-emerald-600" />
       </div>
@@ -683,6 +750,7 @@ function ConfirmationScreen({ state, carrier }: { state: WizardState, carrier: s
     </div>
   )
 }
+
 
 // ── Shared: Step Navigation ─────────────────────────────────
 function StepNav({ onBack, onNext, nextDisabled }: {
