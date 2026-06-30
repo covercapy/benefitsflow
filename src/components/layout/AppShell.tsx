@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { UserRole } from '@/types'
-import { Bell, Search, HelpCircle } from 'lucide-react'
+import { Bell, Search, HelpCircle, Sun, Moon } from 'lucide-react'
 import { RoleContext, EMPLOYEE_ROLES } from '@/lib/role-context'
 import { ROLE_LABELS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import { ThemeProvider, useTheme } from '@/lib/theme-context'
 
 // Fallback personas for "View As" impersonation (HRIS_ANALYST only)
 const ROLE_PERSONAS: Record<UserRole, { name: string; employeeId: string }> = {
@@ -22,6 +23,107 @@ interface AppShellProps {
   children: React.ReactNode
   pageTitle?: string
   pageSubtitle?: string
+}
+
+interface AppShellInnerProps extends AppShellProps {
+  currentRole: UserRole
+  viewName: string
+  viewId: string
+  sessionRole: UserRole
+  isHrisAnalyst: boolean
+  handleRoleChange: (role: UserRole) => void
+  handleLogout: () => void
+}
+
+function AppShellInner({
+  children, pageTitle, pageSubtitle,
+  currentRole, viewName, viewId, sessionRole, isHrisAnalyst,
+  handleRoleChange, handleLogout,
+}: AppShellInnerProps) {
+  const { theme, toggle } = useTheme()
+  const bgCls = theme === 'dark' ? 'bg-slate-50' : 'bg-[#f8f7fc]'
+
+  return (
+    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange }}>
+    <div className={`flex min-h-screen ${bgCls}`}>
+      <Sidebar
+        currentRole={currentRole}
+        workerName={viewName}
+        employeeId={viewId}
+        onRoleChange={isHrisAnalyst ? handleRoleChange : undefined}
+        onLogout={handleLogout}
+        theme={theme}
+      />
+
+      {/* Main content area */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Top bar */}
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 gap-4 shrink-0">
+          {/* Search */}
+          <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 flex-1 max-w-sm">
+            <Search className="w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search workers, benefits, reports..."
+              className="bg-transparent text-sm text-slate-600 placeholder-slate-400 flex-1 outline-none"
+            />
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Impersonation indicator for HRIS Analyst */}
+          {isHrisAnalyst && currentRole !== sessionRole && (
+            <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
+              Viewing as {ROLE_LABELS[currentRole]}
+            </span>
+          )}
+
+          {/* Role badge */}
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
+            EMPLOYEE_ROLES.includes(currentRole)
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : 'bg-blue-100 text-blue-700 border-blue-200'
+          }`}>
+            {ROLE_LABELS[currentRole]}
+          </span>
+
+          {/* Demo badge */}
+          <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Portfolio Demo · Fictional Data
+          </span>
+
+          {/* Theme toggle */}
+          <button onClick={toggle} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500" title="Toggle skin">
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
+          {/* Notifications */}
+          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white" />
+          </button>
+
+          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
+            <HelpCircle className="w-4 h-4" />
+          </button>
+        </header>
+
+        {/* Page header */}
+        {(pageTitle || pageSubtitle) && (
+          <div className="px-6 pt-6 pb-2">
+            {pageTitle && <h1 className="text-xl font-semibold text-slate-900">{pageTitle}</h1>}
+            {pageSubtitle && <p className="text-sm text-slate-500 mt-0.5">{pageSubtitle}</p>}
+          </div>
+        )}
+
+        {/* Page content */}
+        <main className="flex-1 px-6 py-4 overflow-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+    </RoleContext.Provider>
+  )
 }
 
 export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
@@ -96,79 +198,20 @@ export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
   }
 
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange }}>
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar
+    <ThemeProvider>
+      <AppShellInner
+        pageTitle={pageTitle}
+        pageSubtitle={pageSubtitle}
         currentRole={currentRole}
-        workerName={viewName}
-        employeeId={viewId}
-        // Only show role switcher to HRIS Analyst (impersonation)
-        onRoleChange={isHrisAnalyst ? handleRoleChange : undefined}
-        onLogout={handleLogout}
-      />
-
-      {/* Main content area */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 gap-4 shrink-0">
-          {/* Search */}
-          <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search workers, benefits, reports..."
-              className="bg-transparent text-sm text-slate-600 placeholder-slate-400 flex-1 outline-none"
-            />
-          </div>
-
-          <div className="flex-1" />
-
-          {/* Impersonation indicator for HRIS Analyst */}
-          {isHrisAnalyst && currentRole !== sessionRole && (
-            <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
-              Viewing as {ROLE_LABELS[currentRole]}
-            </span>
-          )}
-
-          {/* Role badge */}
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
-            EMPLOYEE_ROLES.includes(currentRole)
-              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-              : 'bg-blue-100 text-blue-700 border-blue-200'
-          }`}>
-            {ROLE_LABELS[currentRole]}
-          </span>
-
-          {/* Demo badge */}
-          <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
-            Portfolio Demo · Fictional Data
-          </span>
-
-          {/* Notifications */}
-          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white" />
-          </button>
-
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-            <HelpCircle className="w-4 h-4" />
-          </button>
-        </header>
-
-        {/* Page header */}
-        {(pageTitle || pageSubtitle) && (
-          <div className="px-6 pt-6 pb-2">
-            {pageTitle && <h1 className="text-xl font-semibold text-slate-900">{pageTitle}</h1>}
-            {pageSubtitle && <p className="text-sm text-slate-500 mt-0.5">{pageSubtitle}</p>}
-          </div>
-        )}
-
-        {/* Page content */}
-        <main className="flex-1 px-6 py-4 overflow-auto">
-          {children}
-        </main>
-      </div>
-    </div>
-    </RoleContext.Provider>
+        viewName={viewName}
+        viewId={viewId}
+        sessionRole={sessionRole}
+        isHrisAnalyst={isHrisAnalyst}
+        handleRoleChange={handleRoleChange}
+        handleLogout={handleLogout}
+      >
+        {children}
+      </AppShellInner>
+    </ThemeProvider>
   )
 }

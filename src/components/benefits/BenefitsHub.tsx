@@ -34,12 +34,12 @@ const BENEFITS: BenefitCard[] = [
     status: 'ACTIVE',
     plan: 'Cigna Dental PPO Enhanced',
     tier: 'Employee + Family',
-    monthlyPremium: 189,
+    monthlyPremium: 32,
     ytdUsed: 1500,
     ytdLimit: 1500,
     enrollHref: '/enroll/dental',
     highlight: 'Annual max reached',
-    note: 'Delta Dental auto-assigned for CA',
+    note: 'EO $18 · ES $25 · EC $25 · EF $32 · Delta Dental auto-assigned for CA',
   },
   {
     id: 'vision',
@@ -63,9 +63,9 @@ const BENEFITS: BenefitCard[] = [
     status: 'ACTIVE',
     plan: 'Kaiser HMO Gold',
     tier: 'Employee + Family',
-    monthlyPremium: 412,
+    monthlyPremium: 150,
     enrollHref: '/enroll',
-    note: 'Managed through Kaiser member portal',
+    note: 'Total premium $450/mo · Ensign pays $300, you pay $150 · Managed through Kaiser member portal',
   },
   {
     id: 'fsa',
@@ -130,6 +130,15 @@ export function BenefitsHub() {
             <p className="text-[11px] text-slate-400">{s.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Employer contribution callout */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 flex items-center gap-3">
+        <Info className="w-4 h-4 text-emerald-600 shrink-0" />
+        <p className="text-xs text-emerald-800">
+          <span className="font-semibold">Ensign Services contributes $300/mo toward your health premium.</span>
+          {' '}Your share is $150/mo (total plan cost $450/mo). Employer contributions are not reflected in your paycheck deductions.
+        </p>
       </div>
 
       {/* Benefit cards grid */}

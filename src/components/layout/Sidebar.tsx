@@ -4,42 +4,46 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { UserRole, ROLE_LABELS } from '@/types'
+import { Theme } from '@/lib/theme-context'
 import {
-  LayoutDashboard, Users, Heart, BarChart3,
-  Shield, Bell, Building2,
-  Stethoscope, Eye, DollarSign, ClipboardList, Calculator, LogOut
+  LayoutDashboard, User, Users, Calendar, FolderOpen,
+  Clock, BarChart3, DollarSign, Heart, FileText,
+  Link2, Receipt, Settings, HelpCircle, Shield,
+  LogOut, Building2
 } from 'lucide-react'
 
-interface NavItem {
-  label: string
-  href: string
-  icon: React.ElementType
-  badge?: number
-}
+interface NavItem { label: string; href: string; icon: React.ElementType; badge?: number }
 
-// ── Personal enrollment nav (blue) — shown to all roles ─────
-const PERSONAL_NAV: NavItem[] = [
-  { label: 'Dashboard',        href: '/dashboard',        icon: LayoutDashboard },
-  { label: 'My Benefits',      href: '/enroll',           icon: Heart },
-  { label: 'Dental Enrollment',href: '/enroll/dental',    icon: Stethoscope },
-  { label: 'Cost Estimator',   href: '/enroll/estimator', icon: Calculator },
-  { label: 'Vision',           href: '/enroll/vision',    icon: Eye },
-  { label: 'FSA / HSA',        href: '/enroll/fsa',       icon: DollarSign },
-  { label: 'Inbox',            href: '/inbox',            icon: Bell, badge: 3 },
-]
-
-// ── Admin / HR nav (purple) — shown to HR roles only ────────
-const ADMIN_NAV: NavItem[] = [
-  { label: 'Workers',          href: '/workers',          icon: Users },
-  { label: 'Reports',          href: '/reports',          icon: BarChart3 },
-  { label: 'Organizations',    href: '/organizations',    icon: Building2 },
-  { label: 'Process Center',   href: '/processes',        icon: ClipboardList },
-  { label: 'Audit Log',        href: '/audit',            icon: Shield },
-]
-
-const HR_ROLES: UserRole[] = ['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP']
-const MANAGER_ADMIN: NavItem[] = [
-  { label: 'Workers',          href: '/workers',          icon: Users },
+const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'Main',
+    items: [
+      { label: 'Dashboard',    href: '/dashboard',  icon: LayoutDashboard },
+      { label: 'Employee',     href: '/employees',  icon: User },
+      { label: 'Calendar',     href: '/calendar',   icon: Calendar },
+      { label: 'Projects',     href: '/projects',   icon: FolderOpen },
+      { label: 'Team Member',  href: '/workers',    icon: Users },
+    ],
+  },
+  {
+    label: 'Management',
+    items: [
+      { label: 'Time off',     href: '/time-off',   icon: Clock },
+      { label: 'Reports',      href: '/reports',    icon: BarChart3 },
+      { label: 'Payrolls',     href: '/payroll',    icon: DollarSign },
+      { label: 'Benefits',     href: '/enroll',     icon: Heart },
+    ],
+  },
+  {
+    label: 'Company',
+    items: [
+      { label: 'Documents',    href: '/documents',  icon: FileText },
+      { label: 'Integrations', href: '/integrations', icon: Link2 },
+      { label: 'Invoices',     href: '/invoices',   icon: Receipt },
+      { label: 'Settings',     href: '/settings',   icon: Settings },
+      { label: 'Help & Center',href: '/help',       icon: HelpCircle },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -48,96 +52,98 @@ interface SidebarProps {
   employeeId: string
   onRoleChange?: (role: UserRole) => void
   onLogout?: () => void
+  theme?: Theme
 }
 
-export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onLogout }: SidebarProps) {
+export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onLogout, theme = 'dark' }: SidebarProps) {
   const pathname = usePathname()
+  const isLight = theme === 'light'
+  const isHR = ['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP'].includes(currentRole)
 
-  const isHR = HR_ROLES.includes(currentRole)
-  const isManager = currentRole === 'MANAGER'
-
-  // Admin items visible to this role
-  const adminItems = isHR
-    ? ADMIN_NAV
-    : isManager
-    ? MANAGER_ADMIN
-    : []
-
-  // Filter admin-only items from personal nav for pure employee view
-  const personalItems = PERSONAL_NAV.filter(item => {
-    // Managers get My Benefits + Inbox but not enrollment wizard steps
-    if (isManager && ['/enroll', '/enroll/dental', '/enroll/vision', '/enroll/fsa', '/enroll/estimator'].includes(item.href)) return false
-    return true
-  })
-
-  function NavLink({ item, variant }: { item: NavItem; variant: 'personal' | 'admin' }) {
+  function NavLink({ item }: { item: NavItem }) {
     const Icon = item.icon
-    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-    return (
-      <Link
-        href={item.href}
-        className={cn(
+    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')) || (item.href === '/enroll' && pathname.startsWith('/enroll'))
+    if (isLight) {
+      return (
+        <Link href={item.href} className={cn(
           'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
           isActive
-            ? variant === 'admin'
-              ? 'bg-violet-600 text-white'
-              : 'bg-blue-600 text-white'
-            : variant === 'admin'
-            ? 'text-violet-200 hover:bg-violet-900/40 hover:text-white'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
-        )}
-      >
+            ? 'bg-violet-50 text-violet-700 border-l-2 border-violet-600 font-semibold rounded-l-none'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        )}>
+          <Icon className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{item.label}</span>
+          {item.badge && <span className="bg-violet-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{item.badge}</span>}
+        </Link>
+      )
+    }
+    return (
+      <Link href={item.href} className={cn(
+        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+        isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-white'
+      )}>
         <Icon className="w-4 h-4 shrink-0" />
         <span className="flex-1">{item.label}</span>
-        {item.badge && (
-          <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-            {item.badge}
-          </span>
-        )}
+        {item.badge && <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{item.badge}</span>}
       </Link>
     )
   }
 
+  // sidebar container styles
+  const sidebarCls = isLight
+    ? 'flex flex-col w-60 min-h-screen bg-white border-r border-slate-200 text-slate-900 shrink-0'
+    : 'flex flex-col w-60 min-h-screen bg-[#1a2332] text-white shrink-0'
+
+  const logoBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
+  const profileBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
+  const switcherBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
+  const sectionLabelCls = isLight ? 'text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5' : 'text-[9px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5'
+  const footerCls = isLight ? 'px-4 py-3 border-t border-slate-100 space-y-2' : 'px-4 py-3 border-t border-white/10 space-y-2'
+  const logoutCls = isLight
+    ? 'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all'
+    : 'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-white transition-all'
+  const disclaimerCls = isLight ? 'text-[10px] text-slate-400 text-center leading-relaxed' : 'text-[10px] text-slate-600 text-center leading-relaxed'
+  const avatarBg = isHR ? 'bg-violet-600' : currentRole === 'MANAGER' ? 'bg-emerald-600' : 'bg-blue-600'
+  const nameCls = isLight ? 'text-sm font-medium text-slate-900 truncate' : 'text-sm font-medium text-white truncate'
+  const idCls = isLight ? 'text-xs text-slate-400' : 'text-xs text-slate-400'
+  const selectCls = isLight
+    ? 'mt-1 w-full bg-slate-50 text-slate-700 text-xs rounded-md px-2 py-1.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500'
+    : 'mt-1 w-full bg-[#243447] text-slate-200 text-xs rounded-md px-2 py-1.5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const viewAsLabelCls = isLight ? 'text-[10px] text-slate-400 uppercase tracking-wider font-medium' : 'text-[10px] text-slate-500 uppercase tracking-wider font-medium'
+
   return (
-    <aside className="flex flex-col w-60 min-h-screen bg-[#1a2332] text-white shrink-0">
+    <aside className={sidebarCls}>
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/10">
+      <div className={cn('px-5 py-5', logoBorderCls)}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
             <Heart className="w-4 h-4 text-white fill-white" />
           </div>
           <div>
-            <p className="font-bold text-sm text-white leading-tight">BenefitsFlow</p>
-            <p className="text-[10px] text-slate-400 leading-tight">HRIS Lab · Demo</p>
+            <p className={cn('font-bold text-sm leading-tight', isLight ? 'text-slate-900' : 'text-white')}>BenefitsFlow</p>
+            <p className={cn('text-[10px] leading-tight', isLight ? 'text-slate-400' : 'text-slate-400')}>HRIS Lab · Demo</p>
           </div>
         </div>
       </div>
 
-      {/* Worker Profile */}
-      <div className="px-4 py-3 border-b border-white/10">
+      {/* Profile */}
+      <div className={cn('px-4 py-3', profileBorderCls)}>
         <div className="flex items-center gap-3">
-          <div className={cn(
-            'w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0',
-            isHR ? 'bg-violet-600' : isManager ? 'bg-emerald-600' : 'bg-blue-600'
-          )}>
+          <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0', avatarBg)}>
             {workerName.split(' ').map(n => n[0]).join('').toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{workerName}</p>
-            <p className="text-xs text-slate-400">{employeeId}</p>
+            <p className={cn(nameCls)}>{workerName}</p>
+            <p className={idCls}>{employeeId}</p>
           </div>
         </div>
       </div>
 
-      {/* Role Switcher */}
+      {/* Role Switcher (HRIS Analyst only) */}
       {onRoleChange && (
-        <div className="px-4 py-2 border-b border-white/10">
-          <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">View As</label>
-          <select
-            value={currentRole}
-            onChange={e => onRoleChange(e.target.value as UserRole)}
-            className="mt-1 w-full bg-[#243447] text-slate-200 text-xs rounded-md px-2 py-1.5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
+        <div className={cn('px-4 py-2', switcherBorderCls)}>
+          <label className={viewAsLabelCls}>View As</label>
+          <select value={currentRole} onChange={e => onRoleChange(e.target.value as UserRole)} className={selectCls}>
             {(Object.keys(ROLE_LABELS) as UserRole[]).map(role => (
               <option key={role} value={role}>{ROLE_LABELS[role]}</option>
             ))}
@@ -145,50 +151,27 @@ export function Sidebar({ currentRole, workerName, employeeId, onRoleChange, onL
         </div>
       )}
 
-      {/* Navigation */}
+      {/* Nav */}
       <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
-
-        {/* Personal section — blue */}
-        <div>
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5">
-            My Workspace
-          </p>
-          <div className="space-y-0.5">
-            {personalItems.map(item => (
-              <NavLink key={item.href} item={item} variant="personal" />
-            ))}
-          </div>
-        </div>
-
-        {/* Admin section — purple, only for HR/Manager */}
-        {adminItems.length > 0 && (
-          <div>
-            <p className="text-[9px] font-bold text-violet-400 uppercase tracking-widest px-3 mb-1.5">
-              {isHR ? 'HR Administration' : 'Team Management'}
-            </p>
+        {NAV_SECTIONS.map(section => (
+          <div key={section.label}>
+            <p className={sectionLabelCls}>{section.label}</p>
             <div className="space-y-0.5">
-              {adminItems.map(item => (
-                <NavLink key={item.href} item={item} variant="admin" />
-              ))}
+              {section.items.map(item => <NavLink key={item.href} item={item} />)}
             </div>
           </div>
-        )}
+        ))}
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/10 space-y-2">
+      <div className={footerCls}>
         {onLogout && (
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-white transition-all"
-          >
+          <button onClick={onLogout} className={logoutCls}>
             <LogOut className="w-3.5 h-3.5" />
             Sign out
           </button>
         )}
-        <p className="text-[10px] text-slate-600 text-center leading-relaxed">
-          BenefitsFlow HRIS Lab · Fictional data only
-        </p>
+        <p className={disclaimerCls}>BenefitsFlow HRIS Lab · Fictional data only</p>
       </div>
     </aside>
   )
