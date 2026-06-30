@@ -22,18 +22,32 @@ interface AppShellProps {
   pageSubtitle?: string
 }
 
+const ROLE_STORAGE_KEY = 'benefitsflow_role'
+
+function getSavedRole(): UserRole {
+  if (typeof window === 'undefined') return 'HRIS_ANALYST'
+  const saved = localStorage.getItem(ROLE_STORAGE_KEY) as UserRole | null
+  if (saved && saved in ROLE_PERSONAS) return saved
+  return 'HRIS_ANALYST'
+}
+
 export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
-  const [currentRole, setCurrentRole] = useState<UserRole>('HRIS_ANALYST')
+  const [currentRole, setCurrentRole] = useState<UserRole>(getSavedRole)
   const persona = ROLE_PERSONAS[currentRole]
 
+  function handleRoleChange(role: UserRole) {
+    localStorage.setItem(ROLE_STORAGE_KEY, role)
+    setCurrentRole(role)
+  }
+
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole: setCurrentRole }}>
+    <RoleContext.Provider value={{ currentRole, setCurrentRole: handleRoleChange }}>
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar
         currentRole={currentRole}
         workerName={persona.name}
         employeeId={persona.employeeId}
-        onRoleChange={setCurrentRole}
+        onRoleChange={handleRoleChange}
       />
 
       {/* Main content area */}
