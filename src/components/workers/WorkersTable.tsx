@@ -5,6 +5,7 @@ import { formatDate, getDaysUntilDeadline, getDeadlineUrgency, getBenefitTierLab
 import { getDentalCarrierForState } from '@/types'
 import { Search, Filter, ChevronRight, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useRole } from '@/lib/role-context'
 
 // Demo data (mirrors seed data)
 const DEMO_WORKERS = [
@@ -35,8 +36,20 @@ const STATUS_CONFIG: Record<string, { label: string; class: string; icon: React.
 export function WorkersTable() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const { currentRole } = useRole()
 
-  const filtered = DEMO_WORKERS.filter(w => {
+  // Role-based column visibility
+  const showCarrier    = currentRole !== 'MANAGER'
+  const showTier       = currentRole === 'HRIS_ANALYST' || currentRole === 'HR_LEADERSHIP'
+  const showDeadline   = currentRole !== 'MANAGER'
+  const showOrgCol     = currentRole === 'HRIS_ANALYST' || currentRole === 'HR_LEADERSHIP'
+
+  // Managers only see their direct-report org
+  const visibleWorkers = currentRole === 'MANAGER'
+    ? DEMO_WORKERS.filter(w => w.org === 'Sunrise Post-Acute Care')
+    : DEMO_WORKERS
+
+  const filtered = visibleWorkers.filter(w => {
     const matchSearch = search === '' ||
       w.name.toLowerCase().includes(search.toLowerCase()) ||
       w.employeeId.toLowerCase().includes(search.toLowerCase()) ||
@@ -81,11 +94,12 @@ export function WorkersTable() {
           <thead>
             <tr>
               <th className="text-left">Worker</th>
-              <th className="text-left">State / Carrier</th>
-              <th className="text-left">Benefit Tier</th>
+              {showCarrier   && <th className="text-left">State / Carrier</th>}
+              {showTier      && <th className="text-left"><span className="text-violet-600">Benefit Tier</span></th>}
               <th className="text-left">Dental Status</th>
               <th className="text-left">Plan</th>
-              <th className="text-left">Deadline</th>
+              {showDeadline  && <th className="text-left">Deadline</th>}
+              {showOrgCol    && <th className="text-left"><span className="text-violet-600">Organization</span></th>}
               <th />
             </tr>
           </thead>
@@ -101,7 +115,8 @@ export function WorkersTable() {
                 <tr key={w.id} className="cursor-pointer group">
                   <td>
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
+                      <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                        showTier ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700')}>
                         {getInitials(w.name.split(' ')[0], w.name.split(' ')[1])}
                       </div>
                       <div>
@@ -110,14 +125,18 @@ export function WorkersTable() {
                       </div>
                     </div>
                   </td>
-                  <td>
-                    <p className="text-sm text-slate-700">{w.state}</p>
-                    <p className="text-xs text-slate-400">{carrier}</p>
-                  </td>
-                  <td>
-                    <span className="text-xs text-slate-600">{getBenefitTierLabel(w.tier)}</span>
-                    <p className="text-[10px] text-slate-400">{w.category === 'FAST_TRACK' ? 'Fast-track' : 'Standard (60-day)'}</p>
-                  </td>
+                  {showCarrier && (
+                    <td>
+                      <p className="text-sm text-slate-700">{w.state}</p>
+                      <p className="text-xs text-slate-400">{carrier}</p>
+                    </td>
+                  )}
+                  {showTier && (
+                    <td>
+                      <span className="text-xs text-violet-700 font-medium">{getBenefitTierLabel(w.tier)}</span>
+                      <p className="text-[10px] text-slate-400">{w.category === 'FAST_TRACK' ? 'Fast-track' : 'Standard (60-day)'}</p>
+                    </td>
+                  )}
                   <td>
                     <span className={cn('inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full', status.class)}>
                       <StatusIcon className="w-3 h-3" />
@@ -125,17 +144,22 @@ export function WorkersTable() {
                     </span>
                   </td>
                   <td className="text-sm text-slate-600">{w.dentalPlan}</td>
-                  <td>
-                    {days !== null && (
-                      <span className={cn('text-xs font-medium', {
-                        'text-red-600': urgency === 'urgent' || urgency === 'expired',
-                        'text-amber-600': urgency === 'warning',
-                        'text-slate-500': urgency === 'safe',
-                      })}>
-                        {urgency === 'expired' ? 'Expired' : `${days}d left`}
-                      </span>
-                    )}
-                  </td>
+                  {showDeadline && (
+                    <td>
+                      {days !== null && (
+                        <span className={cn('text-xs font-medium', {
+                          'text-red-600': urgency === 'urgent' || urgency === 'expired',
+                          'text-amber-600': urgency === 'warning',
+                          'text-slate-500': urgency === 'safe',
+                        })}>
+                          {urgency === 'expired' ? 'Expired' : `${days}d left`}
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  {showOrgCol && (
+                    <td className="text-xs text-slate-500">{w.org}</td>
+                  )}
                   <td>
                     <Link href={`/workers/${w.employeeId}`}
                       className="text-blue-600 hover:text-blue-800 opacity-0 group-hover:opacity-100 transition-opacity">

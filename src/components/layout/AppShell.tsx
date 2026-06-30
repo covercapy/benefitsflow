@@ -7,11 +7,13 @@ import { Bell, Search, HelpCircle } from 'lucide-react'
 import { RoleContext, EMPLOYEE_ROLES } from '@/lib/role-context'
 import { ROLE_LABELS } from '@/types'
 
-// Demo mode: fixed worker for portfolio demo
-const DEMO_WORKER = {
-  name: 'Jordan Rivera',
-  employeeId: 'ESI-10001',
-  defaultRole: 'HRIS_ANALYST' as UserRole,
+// Role-based personas — name + ID change when role switches
+const ROLE_PERSONAS: Record<UserRole, { name: string; employeeId: string }> = {
+  EMPLOYEE:         { name: 'Jordan Rivera',  employeeId: 'ESI-10001' },
+  MANAGER:          { name: 'Lisa Park',       employeeId: 'ESI-10009' },
+  BENEFITS_PARTNER: { name: 'Taylor Chen',     employeeId: 'ESI-10002' },
+  HRIS_ANALYST:     { name: 'Nathan Song',      employeeId: 'ESI-10000' },
+  HR_LEADERSHIP:    { name: 'Morgan Walsh',    employeeId: 'ESI-10003' },
 }
 
 interface AppShellProps {
@@ -21,15 +23,16 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, pageTitle, pageSubtitle }: AppShellProps) {
-  const [currentRole, setCurrentRole] = useState<UserRole>(DEMO_WORKER.defaultRole)
+  const [currentRole, setCurrentRole] = useState<UserRole>('HRIS_ANALYST')
+  const persona = ROLE_PERSONAS[currentRole]
 
   return (
     <RoleContext.Provider value={{ currentRole, setCurrentRole: setCurrentRole }}>
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar
         currentRole={currentRole}
-        workerName={DEMO_WORKER.name}
-        employeeId={DEMO_WORKER.employeeId}
+        workerName={persona.name}
+        employeeId={persona.employeeId}
         onRoleChange={setCurrentRole}
       />
 

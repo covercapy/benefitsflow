@@ -490,8 +490,28 @@ function DependentsStep({ dependents, selected, onChange, onNext, onBack }: {
   dependents: typeof DEMO_DEPENDENTS, selected: string[],
   onChange: (ids: string[]) => void, onNext: () => void, onBack: () => void
 }) {
+  const [allDeps, setAllDeps] = useState(dependents)
+  const [showForm, setShowForm] = useState(false)
+  const [newDep, setNewDep] = useState({ firstName: '', lastName: '', relationship: 'Spouse', dob: '', hasOtherCoverage: false })
+
   function toggle(id: string) {
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
+  }
+
+  function addDependent() {
+    if (!newDep.firstName || !newDep.lastName || !newDep.dob) return
+    const id = `d-new-${Date.now()}`
+    const added = {
+      id,
+      name: `${newDep.firstName} ${newDep.lastName}`,
+      relationship: newDep.relationship,
+      dob: newDep.dob,
+      hasOtherCoverage: newDep.hasOtherCoverage,
+    }
+    setAllDeps(prev => [...prev, added])
+    onChange([...selected, id])
+    setNewDep({ firstName: '', lastName: '', relationship: 'Spouse', dob: '', hasOtherCoverage: false })
+    setShowForm(false)
   }
 
   return (
@@ -499,11 +519,10 @@ function DependentsStep({ dependents, selected, onChange, onNext, onBack }: {
       <h2 className="text-base font-semibold text-slate-900 mb-1">Add Dependents</h2>
       <p className="text-sm text-slate-500 mb-4">
         Select dependents to add to your dental coverage. Documentation must be submitted within 30 days.
-        Domestic partners are only eligible for DHMO (CA) and Kaiser.
       </p>
 
-      <div className="space-y-3 mb-6">
-        {dependents.map(dep => {
+      <div className="space-y-3 mb-4">
+        {allDeps.map(dep => {
           const isSelected = selected.includes(dep.id)
           const age = Math.floor((Date.now() - new Date(dep.dob).getTime()) / (1000*60*60*24*365.25))
           return (
@@ -535,10 +554,70 @@ function DependentsStep({ dependents, selected, onChange, onNext, onBack }: {
         })}
       </div>
 
-      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 mb-6">
-        <p className="text-xs text-blue-800">
+      {/* Add new dependent */}
+      {!showForm ? (
+        <button onClick={() => setShowForm(true)}
+          className="w-full rounded-xl border-2 border-dashed border-slate-200 p-3 text-sm text-blue-600 font-medium hover:border-blue-400 hover:bg-blue-50 transition-colors mb-4">
+          + Add a new dependent
+        </button>
+      ) : (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-800">New Dependent</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">First Name</label>
+              <input value={newDep.firstName} onChange={e => setNewDep(p => ({...p, firstName: e.target.value}))}
+                placeholder="First name"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Last Name</label>
+              <input value={newDep.lastName} onChange={e => setNewDep(p => ({...p, lastName: e.target.value}))}
+                placeholder="Last name"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Relationship</label>
+              <select value={newDep.relationship} onChange={e => setNewDep(p => ({...p, relationship: e.target.value}))}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option>Spouse</option>
+                <option>Domestic Partner</option>
+                <option>Child</option>
+                <option>Stepchild</option>
+                <option>Foster Child</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Date of Birth</label>
+              <input type="date" value={newDep.dob} onChange={e => setNewDep(p => ({...p, dob: e.target.value}))}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={newDep.hasOtherCoverage} onChange={e => setNewDep(p => ({...p, hasOtherCoverage: e.target.checked}))}
+              className="rounded" />
+            This dependent has access to other employer-sponsored coverage
+          </label>
+          <div className="flex gap-2">
+            <button onClick={() => setShowForm(false)}
+              className="flex-1 border border-slate-200 bg-white text-slate-600 text-sm py-2 rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+            <button onClick={addDependent}
+              disabled={!newDep.firstName || !newDep.lastName || !newDep.dob}
+              className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-40 hover:bg-blue-700">
+              Add Dependent
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-6">
+        <p className="text-xs text-amber-800">
           <strong>Documentation required:</strong> Spouse → Marriage Certificate · Children → Birth Certificate ·
-          Submit via Workday or email to benefits@ensignservices.net within 30 days.
+          Submit within 30 days to benefits@ensignservices.net.
         </p>
       </div>
 
