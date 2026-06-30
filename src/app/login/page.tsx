@@ -2,80 +2,88 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Heart, Shield, Users, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import {
+  Heart, Shield, Users, CheckCircle2, ChevronRight,
+  Eye, EyeOff, Stethoscope, Clock, FileText,
+  TrendingUp, Building2, Terminal
+} from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 const USERNAME_SHORTCUTS: Record<string, string> = {
-  nsong: 'hris.analyst@benefitsflow.demo',
-  maya: 'manager.maya@benefitsflow.demo',
-  jordan: 'enrolled@benefitsflow.demo',
+  nsong:    'hris.analyst@benefitsflow.demo',
+  maya:     'manager.maya@benefitsflow.demo',
+  jordan:   'enrolled@benefitsflow.demo',
   billrush: 'billrush@benefitsflow.demo',
 }
 
 const DEMO_PERSONAS = [
   {
-    email: 'hris.analyst@benefitsflow.demo',
-    name: 'Nathan Song',
-    role: 'HRIS Analyst',
-    roleKey: 'HRIS_ANALYST',
+    email:      'hris.analyst@benefitsflow.demo',
+    shortcut:   'nsong',
+    name:       'Nathan Song',
+    role:       'HRIS Analyst',
     employeeId: 'ESI-10000',
-    scenario: 'Full system access · View As any role · Configure & audit',
-    icon: Shield,
-    color: 'violet',
-    badge: 'HRIS Admin',
+    scenario:   'Full system access · View As any role · Create employees',
+    icon:       Shield,
+    color:      'violet',
+    badge:      'HRIS Admin',
   },
   {
-    email: 'manager.maya@benefitsflow.demo',
-    name: 'Maya Johnson',
-    role: 'Manager',
-    roleKey: 'MANAGER',
+    email:      'manager.maya@benefitsflow.demo',
+    shortcut:   'maya',
+    name:       'Maya Johnson',
+    role:       'Manager',
     employeeId: 'ESI-10009',
-    scenario: '5 direct reports · Approvals · Time & attendance oversight',
-    icon: Users,
-    color: 'emerald',
-    badge: 'Manager',
+    scenario:   '5 direct reports · Approvals · Team attendance',
+    icon:       Users,
+    color:      'emerald',
+    badge:      'Manager',
   },
   {
-    email: 'enrolled@benefitsflow.demo',
-    name: 'Jordan Rivera',
-    role: 'Employee',
-    roleKey: 'EMPLOYEE',
+    email:      'enrolled@benefitsflow.demo',
+    shortcut:   'jordan',
+    name:       'Jordan Rivera',
+    role:       'Employee',
     employeeId: 'ESI-10001',
-    scenario: 'Active Cigna PPO · Clock in/out · PTO & benefits self-service',
-    icon: CheckCircle2,
-    color: 'blue',
-    badge: 'Employee',
+    scenario:   'Active Cigna PPO · Clock in/out · Benefits self-service',
+    icon:       CheckCircle2,
+    color:      'blue',
+    badge:      'Employee',
+  },
+  {
+    email:      'billrush@benefitsflow.demo',
+    shortcut:   'billrush',
+    name:       'Bill Rush',
+    role:       'Employee',
+    employeeId: 'ESI-10010',
+    scenario:   'Created via HR Admin panel · New hire onboarding',
+    icon:       CheckCircle2,
+    color:      'sky',
+    badge:      'Employee',
   },
 ]
 
-const COLOR_MAP: Record<string, { card: string; badge: string; icon: string; ring: string }> = {
-  violet: {
-    card: 'border-violet-200 hover:border-violet-400 hover:bg-violet-50/50',
-    badge: 'bg-violet-100 text-violet-700',
-    icon: 'bg-violet-100 text-violet-600',
-    ring: 'ring-violet-400',
-  },
-  emerald: {
-    card: 'border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50',
-    badge: 'bg-emerald-100 text-emerald-700',
-    icon: 'bg-emerald-100 text-emerald-600',
-    ring: 'ring-emerald-400',
-  },
-  blue: {
-    card: 'border-blue-200 hover:border-blue-400 hover:bg-blue-50/50',
-    badge: 'bg-blue-100 text-blue-700',
-    icon: 'bg-blue-100 text-blue-600',
-    ring: 'ring-blue-400',
-  },
+const COLOR_MAP: Record<string, { card: string; badge: string; icon: string; shortcut: string; ring: string }> = {
+  violet: { card: 'hover:border-violet-300 hover:bg-violet-50/40', badge: 'bg-violet-100 text-violet-700', icon: 'bg-violet-100 text-violet-600', shortcut: 'bg-violet-50 text-violet-600 border-violet-200', ring: 'ring-violet-400' },
+  emerald: { card: 'hover:border-emerald-300 hover:bg-emerald-50/40', badge: 'bg-emerald-100 text-emerald-700', icon: 'bg-emerald-100 text-emerald-600', shortcut: 'bg-emerald-50 text-emerald-600 border-emerald-200', ring: 'ring-emerald-400' },
+  blue: { card: 'hover:border-blue-300 hover:bg-blue-50/40', badge: 'bg-blue-100 text-blue-700', icon: 'bg-blue-100 text-blue-600', shortcut: 'bg-blue-50 text-blue-600 border-blue-200', ring: 'ring-blue-400' },
+  sky: { card: 'hover:border-sky-300 hover:bg-sky-50/40', badge: 'bg-sky-100 text-sky-700', icon: 'bg-sky-100 text-sky-600', shortcut: 'bg-sky-50 text-sky-600 border-sky-200', ring: 'ring-sky-400' },
 }
+
+const FEATURE_HIGHLIGHTS = [
+  { icon: Stethoscope, label: 'Dental Enrollment',   desc: 'PPO / DHMO with live cost comparison and provider search' },
+  { icon: Clock,       label: 'Time & Attendance',   desc: 'Clock in/out, daily logs, bi-monthly pay periods' },
+  { icon: TrendingUp,  label: 'Enrollment Reports',  desc: 'Completion rates, accumulators, carrier export audit' },
+  { icon: FileText,    label: 'Inbox & QLE Events',  desc: 'Life event approvals and document verification' },
+  { icon: Building2,   label: 'Worker Directory',    desc: 'Cross-org eligibility, hiring categories, and plan status' },
+  { icon: Shield,      label: 'Audit Log',           desc: 'Immutable change history — every action, every user' },
+]
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('TIMEOUT')), ms)
-    ),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
   ])
 }
 
@@ -92,17 +100,17 @@ export default function LoginPage() {
     setLoading(email)
     setError(null)
     try {
-      const response = await withTimeout(fetch('/api/demo-login', {
+      const res = await withTimeout(fetch('/api/demo-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      }), 6000)
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Demo login failed')
+      }), 7000)
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Demo login failed')
       window.location.href = '/dashboard'
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Demo login failed'
-      setError(message === 'TIMEOUT' ? 'Demo login timed out. Check the Supabase connection.' : message)
+      const msg = err instanceof Error ? err.message : 'Login failed'
+      setError(msg === 'TIMEOUT' ? 'Request timed out — check your Supabase connection.' : msg)
       setLoading(null)
     }
   }
@@ -111,28 +119,22 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading('manual')
     setError(null)
-
-    // Resolve username shortcut — e.g. "nsong" → "hris.analyst@benefitsflow.demo"
-    const resolvedEmail = USERNAME_SHORTCUTS[manualEmail.trim().toLowerCase()] || manualEmail.trim()
-    const isShortcut = resolvedEmail !== manualEmail.trim()
-
+    const resolved = USERNAME_SHORTCUTS[manualEmail.trim().toLowerCase()] || manualEmail.trim()
+    const isShortcut = resolved !== manualEmail.trim()
     try {
       if (isShortcut) {
-        // Use the demo-login API so we use DEMO_ACCOUNT_PASSWORD consistently
-        const response = await withTimeout(fetch('/api/demo-login', {
+        const res = await withTimeout(fetch('/api/demo-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: resolvedEmail }),
-        }), 6000)
-        const result = await response.json()
-        if (!response.ok) throw new Error(result.error || 'Login failed')
+          body: JSON.stringify({ email: resolved }),
+        }), 7000)
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'Login failed')
         window.location.href = '/dashboard'
         return
       }
-      // Standard email + password login
       const { error: signInError } = await withTimeout(
-        supabase.auth.signInWithPassword({ email: resolvedEmail, password: manualPassword }),
-        4000
+        supabase.auth.signInWithPassword({ email: resolved, password: manualPassword }), 5000
       )
       if (signInError) throw signInError
       window.location.href = '/dashboard'
@@ -143,152 +145,227 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#1a2332] to-slate-900 flex flex-col items-center justify-center p-6">
-      {/* Logo */}
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg">
-          <Heart className="w-5 h-5 text-white fill-white" />
-        </div>
-        <div>
-          <p className="font-bold text-xl text-white leading-tight">BenefitsFlow</p>
-          <p className="text-xs text-slate-400">Enterprise HRIS · Demo Environment</p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#f5f5fa] flex">
 
-      <div className="w-full max-w-4xl">
-        {/* Heading */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-semibold text-white">Sign in to BenefitsFlow</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Three roles · Supabase Auth · Real data · No mocks
+      {/* ── LEFT PANEL — branding + feature list ── */}
+      <div className="hidden lg:flex lg:w-[420px] xl:w-[480px] shrink-0 bg-white border-r border-slate-200 flex-col">
+
+        {/* Logo header */}
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+            <Heart className="w-4.5 h-4.5 text-white fill-white" style={{ width: 18, height: 18 }} />
+          </div>
+          <div>
+            <p className="font-bold text-slate-900 leading-tight">BenefitsFlow</p>
+            <p className="text-[11px] text-slate-400">Enterprise HRIS · Demo Environment</p>
+          </div>
+        </div>
+
+        {/* Hero text */}
+        <div className="px-8 pt-8 pb-6">
+          <h2 className="text-2xl font-bold text-slate-900 leading-tight mb-2">
+            HR Infrastructure,<br />Built for Demonstration
+          </h2>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            A fully functional HRIS built with Next.js 14, Supabase, and TypeScript.
+            Three role personas, real database writes, and live enrollment workflows.
           </p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 bg-red-900/40 border border-red-500/40 rounded-xl px-4 py-3 text-red-300 text-sm text-center">
-            {error}
+        {/* Stat strip */}
+        <div className="mx-8 mb-6 grid grid-cols-3 gap-2">
+          {[
+            { label: 'Workers', value: '14+' },
+            { label: 'Modules', value: '9' },
+            { label: 'Tables', value: '18' },
+          ].map(s => (
+            <div key={s.label} className="bg-slate-50 rounded-lg p-3 text-center border border-slate-100">
+              <p className="text-lg font-bold text-violet-600">{s.value}</p>
+              <p className="text-[10px] text-slate-500 font-medium">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Feature list */}
+        <div className="px-8 flex-1">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Platform Modules</p>
+          <div className="space-y-2">
+            {FEATURE_HIGHLIGHTS.map(f => {
+              const Icon = f.icon
+              return (
+                <div key={f.label} className="flex items-start gap-3 py-2">
+                  <div className="w-7 h-7 bg-violet-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <Icon className="w-3.5 h-3.5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">{f.label}</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{f.desc}</p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        )}
-
-        {/* Persona cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-2xl mx-auto">
-          {DEMO_PERSONAS.map(persona => {
-            const colors = COLOR_MAP[persona.color]
-            const Icon = persona.icon
-            const isLoading = loading === persona.email
-
-            return (
-              <button
-                key={persona.email}
-                onClick={() => loginAs(persona.email)}
-                disabled={!!loading}
-                className={cn(
-                  'relative text-left bg-white rounded-xl border-2 p-4 transition-all duration-150 group',
-                  colors.card,
-                  isLoading && `ring-2 ${colors.ring}`,
-                  loading && loading !== persona.email && 'opacity-50'
-                )}
-              >
-                {/* Role badge */}
-                <span className={cn('text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full', colors.badge)}>
-                  {persona.badge}
-                </span>
-
-                <div className="flex items-start gap-3 mt-3">
-                  <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', colors.icon)}>
-                    {isLoading ? (
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Icon className="w-4 h-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-900 text-sm leading-tight">{persona.name}</p>
-                    <p className="text-xs text-slate-500">{persona.role} · {persona.employeeId}</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">{persona.scenario}</p>
-
-                <div className="flex items-center gap-1 mt-3 text-xs font-medium text-slate-400 group-hover:text-slate-700 transition-colors">
-                  {isLoading ? 'Authenticating...' : 'Log in as this persona'}
-                  {!isLoading && <ChevronRight className="w-3 h-3" />}
-                </div>
-              </button>
-            )
-          })}
         </div>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-px bg-white/10" />
-          <button
-            onClick={() => setShowManual(!showManual)}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            {showManual ? 'Hide manual login' : 'Sign in with email & password'}
-          </button>
-          <div className="flex-1 h-px bg-white/10" />
+        {/* Footer */}
+        <div className="px-8 py-5 border-t border-slate-100">
+          <p className="text-[10px] text-slate-400">
+            BenefitsFlow HRIS Lab · All data is fictional · Not affiliated with Ensign, Workday, Cigna, or Delta Dental
+          </p>
+        </div>
+      </div>
+
+      {/* ── RIGHT PANEL — sign-in form ── */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+
+        {/* Mobile logo */}
+        <div className="flex lg:hidden items-center gap-2.5 mb-6">
+          <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
+            <Heart className="w-4 h-4 text-white fill-white" />
+          </div>
+          <p className="font-bold text-slate-900">BenefitsFlow</p>
         </div>
 
-        {/* Manual login */}
-        {showManual && (
-          <form onSubmit={manualLogin} className="bg-white/5 border border-white/10 rounded-xl p-5 max-w-sm mx-auto space-y-3">
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Email</label>
-              <input
-                type="text"
-                value={manualEmail}
-                onChange={e => setManualEmail(e.target.value)}
-                placeholder="email or shortcut (nsong, maya, jordan)"
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
-                required
-              />
-              <p className="text-[10px] text-slate-500 mt-0.5">Shortcuts: nsong · maya · jordan · billrush</p>
+        <div className="w-full max-w-lg">
+
+          {/* Heading */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Sign in</h1>
+            <p className="text-sm text-slate-500 mt-1">Choose a demo persona or sign in with your credentials.</p>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">
+              {error}
             </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={manualPassword}
-                  onChange={e => setManualPassword(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 pr-10 text-sm text-white outline-none focus:ring-1 focus:ring-blue-500"
-                  required
-                />
+          )}
+
+          {/* Persona cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            {DEMO_PERSONAS.map(persona => {
+              const colors = COLOR_MAP[persona.color]
+              const Icon = persona.icon
+              const isLoading = loading === persona.email
+
+              return (
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                  key={persona.email}
+                  onClick={() => loginAs(persona.email)}
+                  disabled={!!loading}
+                  className={cn(
+                    'relative text-left bg-white rounded-xl border-2 border-slate-200 p-4 transition-all duration-150 group shadow-sm',
+                    colors.card,
+                    isLoading && `ring-2 ${colors.ring}`,
+                    loading && loading !== persona.email && 'opacity-50 cursor-not-allowed'
+                  )}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {/* Role badge */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={cn('text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full', colors.badge)}>
+                      {persona.badge}
+                    </span>
+                    <div className={cn('w-6 h-6 rounded-full flex items-center justify-center shrink-0', colors.icon)}>
+                      {isLoading
+                        ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : <Icon className="w-3 h-3" />
+                      }
+                    </div>
+                  </div>
+
+                  <p className="font-semibold text-slate-900 text-sm leading-tight">{persona.name}</p>
+                  <p className="text-[11px] text-slate-400 mb-2.5">{persona.role} · {persona.employeeId}</p>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed mb-3">{persona.scenario}</p>
+
+                  {/* Shortcut pill */}
+                  <div className="flex items-center gap-1.5">
+                    <Terminal className="w-3 h-3 text-slate-400 shrink-0" />
+                    <code className={cn('text-[10px] font-mono font-semibold px-2 py-0.5 rounded border', colors.shortcut)}>
+                      {persona.shortcut}
+                    </code>
+                    <span className="text-[10px] text-slate-400">shortcut</span>
+                  </div>
+
+                  <div className="flex items-center gap-1 mt-2 text-xs font-medium text-slate-400 group-hover:text-slate-700 transition-colors">
+                    {isLoading ? 'Signing in…' : 'Click to sign in'}
+                    {!isLoading && <ChevronRight className="w-3 h-3" />}
+                  </div>
                 </button>
-              </div>
-            </div>
+              )
+            })}
+          </div>
+
+          {/* Divider */}
+          <div className="relative flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-slate-200" />
             <button
-              type="submit"
-              disabled={!!loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg py-2 transition-colors disabled:opacity-50"
+              onClick={() => setShowManual(!showManual)}
+              className="text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap px-1"
             >
-              {loading === 'manual' ? 'Signing in...' : 'Sign in'}
+              {showManual ? '− Hide' : '+ Sign in with email & password'}
             </button>
-          </form>
-        )}
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-        {/* Disclaimer */}
-        {/* Auth links */}
-        <div className="flex items-center justify-center gap-4 mt-5 text-xs text-slate-500">
-          <Link href="/register" className="hover:text-slate-300 transition-colors">Create account</Link>
-          <span>·</span>
-          <Link href="/forgot-password" className="hover:text-slate-300 transition-colors">Forgot password?</Link>
-          <span>·</span>
-          <Link href="/demo-accounts" className="hover:text-slate-300 transition-colors">View demo accounts</Link>
+          {/* Manual login form */}
+          {showManual && (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 mb-5 shadow-sm space-y-3">
+              <form onSubmit={manualLogin} className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Email or shortcut</label>
+                  <input
+                    type="text"
+                    value={manualEmail}
+                    onChange={e => setManualEmail(e.target.value)}
+                    placeholder="email@company.com or nsong / maya / jordan"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Shortcuts: nsong · maya · jordan · billrush</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={manualPassword}
+                      onChange={e => setManualPassword(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-10 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!!loading}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {loading === 'manual' ? 'Signing in…' : 'Sign in'}
+                </button>
+              </form>
+              <p className="text-center text-xs text-slate-400">
+                <Link href="/forgot-password" className="hover:text-violet-600 transition-colors">Forgot password?</Link>
+              </p>
+            </div>
+          )}
+
+          {/* Bottom links */}
+          <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
+            <Link href="/register" className="hover:text-violet-600 transition-colors font-medium">Create account</Link>
+            <span>·</span>
+            <Link href="/demo-accounts" className="hover:text-violet-600 transition-colors">Demo accounts</Link>
+            <span>·</span>
+            <Link href="/forgot-password" className="hover:text-violet-600 transition-colors">Forgot password?</Link>
+          </div>
         </div>
-
-        <p className="text-center text-xs text-slate-600 mt-4">
-          BenefitsFlow HRIS Lab · All data is fictional · Not affiliated with Ensign, Workday, Cigna, or Delta Dental
-        </p>
       </div>
     </div>
   )
