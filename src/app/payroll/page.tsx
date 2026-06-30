@@ -1,9 +1,214 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
-import { Info } from 'lucide-react'
+import { Info, Clock, Cloud, CloudOff, CheckCircle2 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
+
+interface DbSession { id: string; worker_id: string; display_name: string; clock_in: string; clock_out: string | null; duration_minutes: number | null; pay_period: string }
+interface WorkerSummary { worker_id: string; display_name: string; total_minutes: number; session_count: number }
+
+const HOURLY_RATES: Record<string, number> = {
+  'ESI-10000': 44.23,  // Nathan Song — $92k
+  'ESI-10001': 40.87,  // Jordan Rivera — $85k
+  'ESI-10002': 37.50,  // Taylor Chen — $78k
+  'ESI-10004': 34.62,  // Elena Vasquez — $72k
+  'ESI-10005': 35.58,  // Marcus Williams — $74k
+  'ESI-10006': 27.88,  // Chris Patel — $58k
+  'ESI-10007': 20.19,  // Lisa Tran — $42k part-time
+  'ESI-10009': 50.48,  // Maya Johnson — $105k
+}
+
+function TimesheetsTab() {
+  const [sessions, setSessions] = useState<DbSession[]>([])
+  const [byWorker, setByWorker] = useState<WorkerSummary[]>([])
+  const [payPeriod, setPayPeriod] = useState('')
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error' | 'empty'>('loading')
+  const [submitted, setSubmitted] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/time-sessions')
+        const json = await res.json()
+        if (json.error) { setStatus('error'); return }
+        setSessions(json.sessions || [])
+        setByWorker(json.by_worker || [])
+        setPayPeriod(json.pay_period || '')
+        setStatus(json.sessions?.length > 0 ? 'loaded' : 'empty')
+      } catch {
+        setStatus('error')
+      }
+    }
+    load()
+  }, [])
+
+  const totalMinutes = byWorker.reduce((s, w) => s + w.total_minutes, 0)
+  const totalWages = byWorker.reduce((s, w) => s + (w.total_minutes / 60) * (HOURLY_RATES[w.worker_id] || 35), 0)
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center gap-3 py-8 text-slate-400 text-sm">
+        <div className="w-4 h-4 border-2 border-slate-300 border-t-violet-500 rounded-full animate-spin" />
+        Loading timesheet data from Supabase…
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3">
+        <CloudOff className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-amber-800 text-sm">time_sessions table not found</p>
+          <p className="text-amber-700 text-xs mt-1">Run the SQL migration in Supabase to enable time tracking:</p>
+          <code className="block bg-amber-100 text-amber-900 text-xs rounded-lg px-3 py-2 mt-2 font-mono">supabase/migrations/20260630_time_sessions.sql</code>
+          <p className="text-amber-600 text-xs mt-2">Once created, employees can clock in/out from the Time &amp; Attendance page and sessions will appear here.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'empty') {
+    return (
+      <div className="text-center py-10 text-slate-400">
+        <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="font-medium text-sm text-slate-500">No sessions this pay period</p>
+        <p className="text-xs mt-1">Clock in from Time &amp; Attendance → sessions will appear here</p>
+        {payPeriod && <p className="text-xs mt-2 text-violet-600 font-medium">Pay period: {payPeriod}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header with period info */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Timesheets — Current Pay Period</p>
+          {payPeriod && <p className="text-xs text-slate-400 mt-0.5">{payPeriod} · {sessions.filter(s => s.clock_out).length} completed sessions</p>}
+        </div>
+        <span className="flex items-center gap-1.5 text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
+          <Cloud className="w-3 h-3" />Live from Supabase
+        </span>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Total Hours</p>
+          <p className="text-xl font-bold text-slate-900">{(totalMinutes / 60).toFixed(1)}h</p>
+          <p className="text-xs text-slate-400">{byWorker.length} workers</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Estimated Wages</p>
+          <p className="text-xl font-bold text-emerald-700">${totalWages.toFixed(2)}</p>
+          <p className="text-xs text-slate-400">based on hourly rates</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <p className="text-xs text-slate-500">Sessions</p>
+          <p className="text-xl font-bold text-slate-900">{sessions.length}</p>
+          <p className="text-xs text-slate-400">{sessions.filter(s => !s.clock_out).length} still active</p>
+        </div>
+      </div>
+
+      {/* Per-worker summary table */}
+      {byWorker.length > 0 && (
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Hours by Employee</p>
+          </div>
+          <table className="w-full">
+            <thead className="bg-slate-50/50 border-b border-slate-100">
+              <tr>{['Employee','Worker ID','Sessions','Hours','Hourly Rate','Est. Wages','Status'].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-slate-400 px-4 py-2">{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {byWorker.map(w => {
+                const hours = w.total_minutes / 60
+                const rate = HOURLY_RATES[w.worker_id] || 35
+                const wages = hours * rate
+                const hasActive = sessions.some(s => s.worker_id === w.worker_id && !s.clock_out)
+                return (
+                  <tr key={w.worker_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{w.display_name}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500 font-mono">{w.worker_id}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{w.session_count}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-900">{hours.toFixed(2)}h</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">${rate.toFixed(2)}/hr</td>
+                    <td className="px-4 py-3 text-sm font-bold text-emerald-700">${wages.toFixed(2)}</td>
+                    <td className="px-4 py-3">
+                      {hasActive
+                        ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full animate-pulse">Active</span>
+                        : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Complete</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot className="bg-slate-50 border-t border-slate-200">
+              <tr>
+                <td colSpan={4} className="px-4 py-3 text-sm font-bold text-slate-900">Total</td>
+                <td className="px-4 py-3 text-sm font-bold text-slate-900">{(totalMinutes/60).toFixed(2)}h</td>
+                <td className="px-4 py-3 text-sm font-bold text-emerald-700">${totalWages.toFixed(2)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* Raw sessions detail */}
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">All Sessions</p>
+          <span className="text-xs text-slate-400">{sessions.length} records</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50/50 border-b border-slate-100">
+              <tr>{['Employee','Date','Clock In','Clock Out','Duration','Pay Period'].map(h => (
+                <th key={h} className="text-left text-xs font-semibold text-slate-400 px-4 py-2">{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {sessions.map(s => {
+                const inDate = new Date(s.clock_in)
+                const outDate = s.clock_out ? new Date(s.clock_out) : null
+                return (
+                  <tr key={s.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 text-sm font-medium text-slate-900">{s.display_name}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">{inDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-slate-700">{inDate.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})}</td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-slate-700">
+                      {outDate ? outDate.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}) : <span className="text-emerald-600 font-bold">In Progress</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs font-semibold text-slate-900">
+                      {s.duration_minutes != null ? `${Math.floor(s.duration_minutes/60)}h ${s.duration_minutes%60}m` : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{s.pay_period}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Submit to payroll */}
+      {submitted ? (
+        <div className="flex items-center gap-2 text-emerald-700 text-sm font-semibold">
+          <CheckCircle2 className="w-4 h-4" />Timesheets submitted to payroll run for {payPeriod}
+        </div>
+      ) : (
+        <button onClick={() => setSubmitted(true)} className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+          <CheckCircle2 className="w-4 h-4" />Submit Timesheets to Payroll Run
+        </button>
+      )}
+    </div>
+  )
+}
 
 const EMPLOYEES = [
   { id: 'ESI-10001', name: 'Jordan Rivera',   title: 'HR Solutions Analyst',  dept: 'HR Technology',       org: 'Ensign Services',         manager: 'Maya Johnson',   status: 'Active' as const, type: 'Full Time' as const, hire: '2024-01-15', salary: 85000, pto: { used: 5,  balance: 15 } },
@@ -16,7 +221,7 @@ const EMPLOYEES = [
   { id: 'ESI-10002', name: 'Taylor Chen',     title: 'Benefits Partner',       dept: 'Total Rewards',       org: 'Ensign Services',          manager: 'Morgan Walsh',   status: 'Active' as const, type: 'Full Time' as const, hire: '2024-09-16', salary: 78000, pto: { used: 4,  balance: 16 } },
 ] as const
 
-type Tab = 'runs' | 'stubs' | 'deductions' | 'tax'
+type Tab = 'runs' | 'stubs' | 'deductions' | 'tax' | 'timesheets'
 
 const PAY_RUNS = [
   { period: 'Jun 16–30, 2026', runDate: 'Jun 30, 2026', status: 'Processing', gross: 43250, deductions: 8640, net: 34610 },
@@ -68,6 +273,7 @@ export default function PayrollPage() {
     { key: 'stubs', label: 'Pay Stubs' },
     { key: 'deductions', label: 'Deductions Summary' },
     { key: 'tax', label: 'Tax Summary' },
+    { key: 'timesheets', label: '🕐 Timesheets' },
   ]
 
   return (
@@ -221,6 +427,9 @@ export default function PayrollPage() {
               </div>
             </div>
           )}
+
+          {/* Timesheets */}
+          {tab === 'timesheets' && <TimesheetsTab />}
 
           {/* Tax Summary */}
           {tab === 'tax' && (
