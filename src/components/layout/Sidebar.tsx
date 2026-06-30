@@ -4,12 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { UserRole } from '@/types'
-import { Theme } from '@/lib/theme-context'
 import {
   LayoutDashboard, User, Users, Calendar, FolderOpen,
   Clock, BarChart3, DollarSign, Heart, FileText,
-  Link2, Receipt, Settings, HelpCircle, Shield,
-  LogOut, Building2
+  Link2, Receipt, Settings, HelpCircle,
+  LogOut, Plus, Briefcase, Star, Zap, Smile
 } from 'lucide-react'
 
 interface NavItem { label: string; href: string; icon: React.ElementType; badge?: number }
@@ -46,114 +45,156 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   },
 ]
 
+// Decorative icon rail app buttons — visual only, for demo
+const RAIL_APPS = [
+  { color: 'bg-violet-500', icon: Heart, label: 'Benefits' },
+  { color: 'bg-emerald-500', icon: Briefcase, label: 'Payroll' },
+  { color: 'bg-orange-400', icon: Star, label: 'Reports' },
+  { color: 'bg-sky-500', icon: Zap, label: 'Automations' },
+  { color: 'bg-rose-400', icon: Smile, label: 'Team' },
+]
+
 interface SidebarProps {
   currentRole: UserRole
   workerName: string
   employeeId: string
   onLogout?: () => void
-  theme?: Theme
 }
 
-export function Sidebar({ currentRole, workerName, employeeId, onLogout, theme = 'dark' }: SidebarProps) {
+export function Sidebar({ currentRole, workerName, employeeId, onLogout }: SidebarProps) {
   const pathname = usePathname()
-  const isLight = theme === 'light'
   const isHR = ['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP'].includes(currentRole)
+
+  const avatarBg = isHR
+    ? 'bg-violet-600'
+    : currentRole === 'MANAGER'
+    ? 'bg-emerald-600'
+    : 'bg-blue-500'
+
+  const initials = workerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 
   function NavLink({ item }: { item: NavItem }) {
     const Icon = item.icon
-    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')) || (item.href === '/enroll' && pathname.startsWith('/enroll'))
-    if (isLight) {
-      return (
-        <Link href={item.href} className={cn(
+    const isActive =
+      pathname === item.href ||
+      (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')) ||
+      (item.href === '/enroll' && pathname.startsWith('/enroll'))
+
+    return (
+      <Link
+        href={item.href}
+        className={cn(
           'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
           isActive
-            ? 'bg-violet-50 text-violet-700 border-l-2 border-violet-600 font-semibold rounded-l-none'
-            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-        )}>
-          <Icon className="w-4 h-4 shrink-0" />
-          <span className="flex-1">{item.label}</span>
-          {item.badge && <span className="bg-violet-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{item.badge}</span>}
-        </Link>
-      )
-    }
-    return (
-      <Link href={item.href} className={cn(
-        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
-        isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-white'
-      )}>
-        <Icon className="w-4 h-4 shrink-0" />
+            ? 'bg-violet-50 text-violet-700 font-semibold'
+            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+        )}
+      >
+        <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-violet-600' : 'text-slate-400')} />
         <span className="flex-1">{item.label}</span>
-        {item.badge && <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{item.badge}</span>}
+        {item.badge && (
+          <span className="bg-violet-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+            {item.badge}
+          </span>
+        )}
       </Link>
     )
   }
 
-  // sidebar container styles
-  const sidebarCls = isLight
-    ? 'flex flex-col w-60 min-h-screen bg-white border-r border-slate-200 text-slate-900 shrink-0'
-    : 'flex flex-col w-60 min-h-screen bg-[#1a2332] text-white shrink-0'
-
-  const logoBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
-  const profileBorderCls = isLight ? 'border-b border-slate-100' : 'border-b border-white/10'
-  const sectionLabelCls = isLight ? 'text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5' : 'text-[9px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1.5'
-  const footerCls = isLight ? 'px-4 py-3 border-t border-slate-100 space-y-2' : 'px-4 py-3 border-t border-white/10 space-y-2'
-  const logoutCls = isLight
-    ? 'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all'
-    : 'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-white transition-all'
-  const disclaimerCls = isLight ? 'text-[10px] text-slate-400 text-center leading-relaxed' : 'text-[10px] text-slate-600 text-center leading-relaxed'
-  const avatarBg = isHR ? 'bg-violet-600' : currentRole === 'MANAGER' ? 'bg-emerald-600' : 'bg-blue-600'
-  const nameCls = isLight ? 'text-sm font-medium text-slate-900 truncate' : 'text-sm font-medium text-white truncate'
-  const idCls = isLight ? 'text-xs text-slate-400' : 'text-xs text-slate-400'
   return (
-    <aside className={sidebarCls}>
-      {/* Logo */}
-      <div className={cn('px-5 py-5', logoBorderCls)}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-4 h-4 text-white fill-white" />
-          </div>
+    <div className="flex min-h-screen shrink-0">
+      {/* ── Icon Rail ─────────────────────────────── */}
+      <div className="w-[62px] bg-[#f4f4f5] border-r border-slate-200 flex flex-col items-center py-4 gap-3">
+        {/* BenefitsFlow brand icon */}
+        <div className="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center mb-2 shadow-sm">
+          <Heart className="w-4 h-4 text-white fill-white" />
+        </div>
+
+        {/* App icons */}
+        {RAIL_APPS.map(app => (
+          <button
+            key={app.label}
+            title={app.label}
+            className={cn(
+              'w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 hover:shadow-md',
+              app.color
+            )}
+          >
+            <app.icon className="w-4 h-4 text-white" />
+          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        {/* Add button */}
+        <button
+          title="Add workspace"
+          className="w-9 h-9 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-violet-400 hover:text-violet-500 transition-all"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+
+        {/* User avatar */}
+        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-sm', avatarBg)}>
+          {initials}
+        </div>
+      </div>
+
+      {/* ── Text Sidebar ──────────────────────────── */}
+      <aside className="w-[220px] bg-white border-r border-slate-200 flex flex-col min-h-screen">
+        {/* Logo + app name */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
           <div>
-            <p className={cn('font-bold text-sm leading-tight', isLight ? 'text-slate-900' : 'text-white')}>BenefitsFlow</p>
-            <p className={cn('text-[10px] leading-tight', isLight ? 'text-slate-400' : 'text-slate-400')}>HRIS Lab · Demo</p>
+            <p className="font-bold text-sm text-slate-900 leading-tight">BenefitsFlow</p>
+            <p className="text-[10px] text-slate-400 leading-tight">HRIS · Demo Environment</p>
           </div>
         </div>
-      </div>
 
-      {/* Profile */}
-      <div className={cn('px-4 py-3', profileBorderCls)}>
-        <div className="flex items-center gap-3">
-          <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0', avatarBg)}>
-            {workerName.split(' ').map(n => n[0]).join('').toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className={cn(nameCls)}>{workerName}</p>
-            <p className={idCls}>{employeeId}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
-        {NAV_SECTIONS.map(section => (
-          <div key={section.label}>
-            <p className={sectionLabelCls}>{section.label}</p>
-            <div className="space-y-0.5">
-              {section.items.map(item => <NavLink key={item.href} item={item} />)}
+        {/* Profile row */}
+        <div className="px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0', avatarBg)}>
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 truncate leading-tight">{workerName}</p>
+              <p className="text-[11px] text-slate-400 truncate">{employeeId}</p>
             </div>
           </div>
-        ))}
-      </nav>
+        </div>
 
-      {/* Footer */}
-      <div className={footerCls}>
-        {onLogout && (
-          <button onClick={onLogout} className={logoutCls}>
-            <LogOut className="w-3.5 h-3.5" />
-            Sign out
-          </button>
-        )}
-        <p className={disclaimerCls}>BenefitsFlow HRIS Lab · Fictional data only</p>
-      </div>
-    </aside>
+        {/* Nav sections */}
+        <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-5">
+          {NAV_SECTIONS.map(section => (
+            <div key={section.label}>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map(item => (
+                  <NavLink key={item.href} item={item} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-slate-100 space-y-2">
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign out
+            </button>
+          )}
+          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+            BenefitsFlow HRIS Lab · Fictional data
+          </p>
+        </div>
+      </aside>
+    </div>
   )
 }

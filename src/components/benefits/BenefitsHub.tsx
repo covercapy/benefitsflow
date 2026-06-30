@@ -1,246 +1,290 @@
 'use client'
 
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
-import {
-  CheckCircle2, AlertTriangle, Clock, ChevronRight,
-  Stethoscope, Eye, DollarSign, Heart, Shield,
-  Umbrella, Pill, Calculator, Info
-} from 'lucide-react'
+import { ChevronRight, Heart, DollarSign, Eye, Stethoscope, Pill, Umbrella, Wallet, TrendingUp, Car, Info, CheckCircle2 } from 'lucide-react'
 
-interface BenefitCard {
-  id: string
-  label: string
+// ── Gradient recommendation cards ────────────────────────────────────────────
+function GradientCard({
+  title,
+  description,
+  gradient,
+  iconBg,
+  icon: Icon,
+  href,
+  shapeColor,
+}: {
+  title: string
+  description: string
+  gradient: string
+  iconBg: string
+  icon: React.ElementType
+  href: string
+  shapeColor: string
+}) {
+  return (
+    <Link
+      href={href}
+      className={`relative flex flex-col justify-between p-5 rounded-2xl overflow-hidden min-h-[140px] cursor-pointer hover:shadow-lg transition-all group ${gradient}`}
+    >
+      {/* Decorative shape */}
+      <div
+        className={`absolute right-0 top-0 w-28 h-28 rounded-full opacity-20 translate-x-8 -translate-y-8 ${shapeColor}`}
+      />
+      <div
+        className={`absolute right-4 bottom-0 w-20 h-20 rounded-full opacity-15 translate-y-6 ${shapeColor}`}
+      />
+
+      {/* Icon */}
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+
+      {/* Text */}
+      <div className="mt-4 relative z-10">
+        <h3 className="font-bold text-slate-800 text-sm leading-tight">{title}</h3>
+        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{description}</p>
+      </div>
+    </Link>
+  )
+}
+
+// ── Single list row ───────────────────────────────────────────────────────────
+function BenefitRow({
+  icon: Icon,
+  iconBg,
+  title,
+  description,
+  href,
+  badge,
+}: {
+  icon: React.ElementType
+  iconBg: string
+  title: string
+  description: string
+  href: string
+  badge?: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors group"
+    >
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+        <Icon className="w-4 h-4 text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-800 group-hover:text-violet-700 transition-colors">
+            {title}
+          </p>
+          {badge && (
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-violet-400 transition-colors shrink-0" />
+    </Link>
+  )
+}
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
+function BenefitSection({
+  icon: Icon,
+  iconColor,
+  title,
+  children,
+  seeAllHref,
+}: {
   icon: React.ElementType
   iconColor: string
-  status: 'ACTIVE' | 'NOT_ENROLLED' | 'PENDING' | 'WAIVED'
-  plan?: string
-  tier?: string
-  monthlyPremium?: number
-  ytdUsed?: number
-  ytdLimit?: number
-  enrollHref: string
-  learnHref?: string
-  highlight?: string
-  note?: string
+  title: string
+  children: React.ReactNode
+  seeAllHref?: string
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+          <h2 className="text-sm font-bold text-slate-800">{title}</h2>
+        </div>
+        {seeAllHref && (
+          <Link
+            href={seeAllHref}
+            className="text-xs font-semibold text-slate-500 hover:text-violet-600 transition-colors px-3 py-1 rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50"
+          >
+            See All
+          </Link>
+        )}
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+        {children}
+      </div>
+    </div>
+  )
 }
 
-const BENEFITS: BenefitCard[] = [
-  {
-    id: 'dental',
-    label: 'Dental',
-    icon: Stethoscope,
-    iconColor: 'bg-blue-50 text-blue-600',
-    status: 'ACTIVE',
-    plan: 'Cigna Dental PPO Enhanced',
-    tier: 'Employee + Family',
-    monthlyPremium: 32,
-    ytdUsed: 1500,
-    ytdLimit: 1500,
-    enrollHref: '/enroll/dental',
-    highlight: 'Annual max reached',
-    note: 'EO $18 · ES $25 · EC $25 · EF $32 · Delta Dental auto-assigned for CA',
-  },
-  {
-    id: 'vision',
-    label: 'Vision',
-    icon: Eye,
-    iconColor: 'bg-teal-50 text-teal-600',
-    status: 'ACTIVE',
-    plan: 'VSP Choice Plan',
-    tier: 'Employee + Family',
-    monthlyPremium: 22,
-    ytdUsed: 0,
-    ytdLimit: 150,
-    enrollHref: '/enroll/vision',
-    note: 'Annual eye exam + $150 frame allowance',
-  },
-  {
-    id: 'medical',
-    label: 'Medical',
-    icon: Heart,
-    iconColor: 'bg-rose-50 text-rose-600',
-    status: 'ACTIVE',
-    plan: 'Kaiser HMO Gold',
-    tier: 'Employee + Family',
-    monthlyPremium: 150,
-    enrollHref: '/enroll',
-    note: 'Total premium $450/mo · Ensign pays $300, you pay $150 · Managed through Kaiser member portal',
-  },
-  {
-    id: 'fsa',
-    label: 'Healthcare FSA',
-    icon: DollarSign,
-    iconColor: 'bg-emerald-50 text-emerald-600',
-    status: 'ACTIVE',
-    plan: 'Healthcare FSA – Cigna',
-    monthlyPremium: 150,
-    ytdUsed: 420,
-    ytdLimit: 1800,
-    enrollHref: '/enroll/fsa',
-    note: '$1,800 elected · $150/mo pre-tax · Use-it-or-lose-it by Dec 31',
-  },
-  {
-    id: 'life',
-    label: 'Life & AD&D',
-    icon: Umbrella,
-    iconColor: 'bg-violet-50 text-violet-600',
-    status: 'ACTIVE',
-    plan: 'Basic Life 2× salary (employer-paid)',
-    enrollHref: '/enroll',
-    note: 'Supplemental life available — add during open enrollment',
-  },
-  {
-    id: 'prescription',
-    label: 'Prescription Drug',
-    icon: Pill,
-    iconColor: 'bg-amber-50 text-amber-600',
-    status: 'ACTIVE',
-    plan: 'Kaiser Rx (bundled with medical)',
-    enrollHref: '/enroll',
-    note: '$10 generic / $35 preferred brand / $60 non-preferred',
-  },
-]
-
-const STATUS_CONFIG = {
-  ACTIVE:       { label: 'Active',       class: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-  NOT_ENROLLED: { label: 'Not Enrolled', class: 'bg-slate-100 text-slate-500',     icon: Clock },
-  PENDING:      { label: 'Pending',      class: 'bg-amber-100 text-amber-700',     icon: Clock },
-  WAIVED:       { label: 'Waived',       class: 'bg-slate-100 text-slate-400',     icon: AlertTriangle },
-}
-
-// Summary totals
-const totalMonthly = BENEFITS.filter(b => b.monthlyPremium).reduce((s, b) => s + (b.monthlyPremium ?? 0), 0)
-const biweekly = (totalMonthly * 12 / 26).toFixed(2)
-
+// ── Main component ────────────────────────────────────────────────────────────
 export function BenefitsHub() {
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-8">
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Recommended cards */}
+      <section>
+        <h2 className="text-sm font-bold text-slate-700 mb-4">Recommended for your company</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <GradientCard
+            title="Health Benefits"
+            description="Medical, dental and vision benefits keep your employees healthy and happy."
+            gradient="bg-gradient-to-br from-violet-100 via-purple-50 to-indigo-100"
+            iconBg="bg-violet-500"
+            icon={Heart}
+            href="/enroll/dental"
+            shapeColor="bg-violet-400"
+          />
+          <GradientCard
+            title="Financial Future"
+            description="Help employees save pre-tax money for their financial future."
+            gradient="bg-gradient-to-br from-orange-100 via-amber-50 to-rose-100"
+            iconBg="bg-orange-400"
+            icon={DollarSign}
+            href="/enroll/fsa"
+            shapeColor="bg-orange-400"
+          />
+          <GradientCard
+            title="Commuter"
+            description="Help your employees spend less money when they commute to work."
+            gradient="bg-gradient-to-br from-sky-100 via-blue-50 to-cyan-100"
+            iconBg="bg-sky-500"
+            icon={Car}
+            href="/enroll"
+            shapeColor="bg-sky-400"
+          />
+        </div>
+      </section>
+
+      {/* Health section */}
+      <BenefitSection icon={Heart} iconColor="text-rose-500" title="Health" seeAllHref="/enroll">
+        <BenefitRow
+          icon={Stethoscope}
+          iconBg="bg-blue-500"
+          title="Medical, Dental & Vision"
+          description="Get medical, vision, and dental benefits administration at no extra cost."
+          href="/enroll/dental"
+          badge="Active"
+        />
+        <BenefitRow
+          icon={DollarSign}
+          iconBg="bg-emerald-500"
+          title="Health Savings Account"
+          description="Help employees with high-deductible health plans set aside money for health expenses."
+          href="/enroll/fsa"
+        />
+        <BenefitRow
+          icon={Heart}
+          iconBg="bg-violet-500"
+          title="Flexible Spending Account – Medical"
+          description="Give employees a tax-advantaged way to set aside money for health expenses."
+          href="/enroll/fsa"
+          badge="Active"
+        />
+        <BenefitRow
+          icon={Pill}
+          iconBg="bg-amber-500"
+          title="Prescription Drug"
+          description="$10 generic / $35 preferred brand / $60 non-preferred. Bundled with medical."
+          href="/enroll"
+          badge="Active"
+        />
+      </BenefitSection>
+
+      {/* Financial Health section */}
+      <BenefitSection icon={DollarSign} iconColor="text-orange-500" title="Financial Health" seeAllHref="/payroll">
+        <BenefitRow
+          icon={Wallet}
+          iconBg="bg-slate-600"
+          title="Wallet"
+          description="A benefit that helps employees manage their paychecks and save money at no cost to employers."
+          href="/payroll"
+        />
+        <BenefitRow
+          icon={TrendingUp}
+          iconBg="bg-rose-500"
+          title="Traditional or Roth 401(k)"
+          description="Invest in your team's future with low-cost retirement plans. 4% employer match."
+          href="/payroll"
+        />
+        <BenefitRow
+          icon={DollarSign}
+          iconBg="bg-orange-400"
+          title="Financial Wellness Program"
+          description="Pre-tax savings, employer contributions, and financial planning resources."
+          href="/enroll/fsa"
+        />
+      </BenefitSection>
+
+      {/* Life & Protection */}
+      <BenefitSection icon={Umbrella} iconColor="text-violet-500" title="Life & Protection" seeAllHref="/enroll">
+        <BenefitRow
+          icon={Umbrella}
+          iconBg="bg-violet-500"
+          title="Life & AD&D Insurance"
+          description="Basic life at 2× annual salary — employer paid. Supplemental life available."
+          href="/enroll"
+          badge="Active"
+        />
+        <BenefitRow
+          icon={Eye}
+          iconBg="bg-teal-500"
+          title="Vision Plan"
+          description="VSP Choice Plan — annual eye exam + $150 frame allowance. Employee + Family coverage."
+          href="/enroll/vision"
+          badge="Active"
+        />
+      </BenefitSection>
+
+      {/* Open enrollment callout */}
+      <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+        <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+          <Info className="w-4 h-4 text-violet-600" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-violet-900">Open enrollment opens November 1, 2026</p>
+          <p className="text-xs text-violet-700 mt-0.5 leading-relaxed">
+            Change plans, update coverage tiers, add dependents, and adjust FSA elections.
+            Changes take effect January 1, 2027.
+          </p>
+        </div>
+        <Link
+          href="/inbox"
+          className="text-xs font-bold text-violet-700 bg-white border border-violet-200 px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-violet-100 transition-colors shrink-0"
+        >
+          Report Life Event
+        </Link>
+      </div>
+
+      {/* Enrolled summary strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total monthly premiums', value: `$${totalMonthly.toLocaleString()}/mo`, sub: 'Employee share after employer contribution', color: 'text-slate-900' },
-          { label: 'Per-paycheck deduction', value: `$${biweekly}`, sub: 'Biweekly (26 pay periods)', color: 'text-blue-700' },
-          { label: 'Next change window', value: 'Nov 1 – 30', sub: 'Open enrollment 2026 · Effective Jan 1, 2027', color: 'text-violet-700' },
+          { label: 'Plans Active', value: '5', sub: 'across 3 categories', icon: CheckCircle2, color: 'text-emerald-600', iconBg: 'bg-emerald-50' },
+          { label: 'Monthly Deduction', value: '$354', sub: 'from paycheck', icon: DollarSign, color: 'text-slate-900', iconBg: 'bg-slate-50' },
+          { label: 'Employer Contributes', value: '$300', sub: 'toward health premium', icon: Heart, color: 'text-blue-600', iconBg: 'bg-blue-50' },
+          { label: 'Open Enrollment', value: '124d', sub: 'Nov 1 – Nov 30, 2026', icon: Heart, color: 'text-violet-600', iconBg: 'bg-violet-50' },
         ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
-            <p className={cn('text-xl font-bold', s.color)}>{s.value}</p>
+          <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${s.iconBg} mb-3`}>
+              <s.icon className={`w-4 h-4 ${s.color}`} />
+            </div>
+            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
             <p className="text-xs font-medium text-slate-700 mt-0.5">{s.label}</p>
             <p className="text-[11px] text-slate-400">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Employer contribution callout */}
-      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 flex items-center gap-3">
-        <Info className="w-4 h-4 text-emerald-600 shrink-0" />
-        <p className="text-xs text-emerald-800">
-          <span className="font-semibold">Ensign Services contributes $300/mo toward your health premium.</span>
-          {' '}Your share is $150/mo (total plan cost $450/mo). Employer contributions are not reflected in your paycheck deductions.
-        </p>
-      </div>
-
-      {/* Benefit cards grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {BENEFITS.map(b => {
-          const { label: statusLabel, class: statusClass, icon: StatusIcon } = STATUS_CONFIG[b.status]
-          const annualMaxHit = b.ytdUsed !== undefined && b.ytdLimit !== undefined && b.ytdUsed >= b.ytdLimit
-          const Icon = b.icon
-
-          return (
-            <div key={b.id}
-              className={cn('bg-white rounded-2xl border p-5 flex flex-col gap-4 transition-shadow hover:shadow-md',
-                annualMaxHit ? 'border-red-200' : 'border-slate-200')}>
-              {/* Header */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', b.iconColor)}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">{b.label}</h3>
-                    {b.plan && <p className="text-[11px] text-slate-400 mt-0.5">{b.plan}</p>}
-                  </div>
-                </div>
-                <span className={cn('flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full', statusClass)}>
-                  <StatusIcon className="w-2.5 h-2.5" />
-                  {statusLabel}
-                </span>
-              </div>
-
-              {/* Details */}
-              <div className="space-y-1.5 text-xs">
-                {b.tier && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Coverage tier</span>
-                    <span className="font-medium text-slate-800">{b.tier}</span>
-                  </div>
-                )}
-                {b.monthlyPremium !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Monthly premium</span>
-                    <span className="font-medium text-slate-800">${b.monthlyPremium}/mo</span>
-                  </div>
-                )}
-                {b.ytdUsed !== undefined && b.ytdLimit !== undefined && (
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-slate-500">YTD benefit used</span>
-                      <span className={cn('font-bold', annualMaxHit ? 'text-red-600' : 'text-slate-800')}>
-                        ${b.ytdUsed} / ${b.ytdLimit}
-                        {annualMaxHit && ' ⚠'}
-                      </span>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={cn('h-full rounded-full', annualMaxHit ? 'bg-red-500' : 'bg-blue-500')}
-                        style={{ width: `${Math.min(100, (b.ytdUsed / b.ytdLimit) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {b.note && (
-                  <p className="text-[11px] text-slate-400 pt-0.5">{b.note}</p>
-                )}
-                {annualMaxHit && (
-                  <p className="text-[11px] text-red-600 font-medium">
-                    Annual max reached — remaining costs are 100% member responsibility until Jan 1.
-                  </p>
-                )}
-              </div>
-
-              {/* CTA */}
-              <div className="pt-1 border-t border-slate-100 flex items-center justify-between">
-                <Link href="/enroll/estimator"
-                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-blue-600 transition-colors">
-                  <Calculator className="w-3 h-3" /> Cost estimator
-                </Link>
-                <Link href={b.enrollHref}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
-                  View / Change <ChevronRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Open enrollment reminder */}
-      <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-4 flex items-start gap-3">
-        <Info className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-violet-900">Open enrollment opens November 1, 2026</p>
-          <p className="text-xs text-violet-700 mt-0.5">
-            You can change your dental plan (PPO ↔ DHMO), update coverage tiers, add or remove dependents, and adjust your FSA election.
-            Changes take effect January 1, 2027. Outside this window, changes require a qualifying life event (marriage, birth, loss of coverage).
-          </p>
-        </div>
-        <Link href="/inbox"
-          className="text-xs font-bold text-violet-700 bg-white border border-violet-200 px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-violet-100 transition-colors">
-          Report Life Event
-        </Link>
-      </div>
     </div>
   )
 }

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { Sidebar } from './Sidebar'
-import { UserRole, ROLE_LABELS } from '@/types'
-import { Bell, Search, HelpCircle, Sun, Moon } from 'lucide-react'
-import { RoleContext, EMPLOYEE_ROLES } from '@/lib/role-context'
+import { UserRole } from '@/types'
+import { Bell, Search, Sun, Moon, Calendar } from 'lucide-react'
+import { RoleContext } from '@/lib/role-context'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeProvider, useTheme } from '@/lib/theme-context'
 
@@ -28,7 +28,19 @@ function AppShellInner({
   handleLogout,
 }: AppShellInnerProps) {
   const { theme, toggle } = useTheme()
-  const bgCls = theme === 'dark' ? 'bg-slate-50' : 'bg-[#f8f7fc]'
+  const bgCls = 'bg-[#f5f5fa]'
+
+  function getGreeting(name: string): string {
+    const h = new Date().getHours()
+    const timeGreeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+    const firstName = name.split(' ')[0] || name
+    return `${timeGreeting}, ${firstName}!`
+  }
+
+  function getGreetingEmoji(): string {
+    const h = new Date().getHours()
+    return h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙'
+  }
 
   return (
     <RoleContext.Provider value={{ currentRole, setCurrentRole: () => {}, viewWorkerId: viewId, viewDisplayName: viewName }}>
@@ -38,52 +50,51 @@ function AppShellInner({
         workerName={viewName}
         employeeId={viewId}
         onLogout={handleLogout}
-        theme={theme}
       />
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 gap-4 shrink-0">
-          {/* Search */}
-          <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search workers, benefits, reports..."
-              className="bg-transparent text-sm text-slate-600 placeholder-slate-400 flex-1 outline-none"
-            />
+        <header className="h-14 bg-white border-b border-slate-100 flex items-center px-6 gap-4 shrink-0">
+          {/* Personalized greeting */}
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{getGreetingEmoji()}</span>
+            <h2 className="text-sm font-semibold text-slate-800">
+              {viewName && viewName !== 'Loading...' ? getGreeting(viewName) : 'Welcome to BenefitsFlow'}
+            </h2>
           </div>
 
           <div className="flex-1" />
 
-          {/* Role badge */}
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
-            EMPLOYEE_ROLES.includes(currentRole)
-              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-              : 'bg-blue-100 text-blue-700 border-blue-200'
-          }`}>
-            {ROLE_LABELS[currentRole]}
-          </span>
-
-          {/* Demo badge */}
-          <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wide">
-            Portfolio Demo · Fictional Data
-          </span>
+          {/* Search bar — right side */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 w-52">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search anything"
+              className="bg-transparent text-xs text-slate-600 placeholder-slate-400 flex-1 outline-none min-w-0"
+            />
+            <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded shrink-0">⌘F</span>
+          </div>
 
           {/* Theme toggle */}
-          <button onClick={toggle} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500" title="Toggle skin">
+          <button
+            onClick={toggle}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+            title="Toggle theme"
+          >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          {/* Notifications */}
-          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white" />
+          {/* Calendar icon */}
+          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+            <Calendar className="w-4 h-4" />
           </button>
 
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">
-            <HelpCircle className="w-4 h-4" />
+          {/* Notifications */}
+          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
           </button>
         </header>
 
