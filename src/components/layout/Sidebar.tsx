@@ -5,45 +5,97 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { UserRole } from '@/types'
 import {
-  LayoutDashboard, User, Users, Calendar, FolderOpen,
+  LayoutDashboard, User, Users, Calendar,
   Clock, BarChart3, DollarSign, Heart, FileText,
   Link2, Receipt, Settings, HelpCircle,
-  LogOut, Plus, Briefcase, Star, Zap, Smile
+  LogOut, Plus, Briefcase, Star, Zap, Smile,
+  Mail, CheckSquare, Eye, Wallet
 } from 'lucide-react'
 
 interface NavItem { label: string; href: string; icon: React.ElementType; badge?: number }
+interface NavSection { label: string; items: NavItem[] }
 
-const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
-  {
-    label: 'Main',
-    items: [
-      { label: 'Dashboard',    href: '/dashboard',  icon: LayoutDashboard },
-      { label: 'Employee',     href: '/employees',  icon: User },
-      { label: 'Calendar',     href: '/calendar',   icon: Calendar },
-      { label: 'Projects',     href: '/projects',   icon: FolderOpen },
-      { label: 'Team Member',  href: '/workers',    icon: Users },
-    ],
-  },
-  {
-    label: 'Management',
-    items: [
-      { label: 'Time off',     href: '/time-off',   icon: Clock },
-      { label: 'Reports',      href: '/reports',    icon: BarChart3 },
-      { label: 'Payrolls',     href: '/payroll',    icon: DollarSign },
-      { label: 'Benefits',     href: '/enroll',     icon: Heart },
-    ],
-  },
-  {
-    label: 'Company',
-    items: [
-      { label: 'Documents',    href: '/documents',  icon: FileText },
-      { label: 'Integrations', href: '/integrations', icon: Link2 },
-      { label: 'Invoices',     href: '/invoices',   icon: Receipt },
-      { label: 'Settings',     href: '/settings',   icon: Settings },
-      { label: 'Help & Center',href: '/help',       icon: HelpCircle },
-    ],
-  },
-]
+function getNavSections(role: UserRole, inboxCount?: number): NavSection[] {
+  if (role === 'EMPLOYEE') {
+    return [
+      {
+        label: 'MY WORKSPACE',
+        items: [
+          { label: 'Dashboard',         href: '/dashboard',         icon: LayoutDashboard },
+          { label: 'My Benefits',        href: '/enroll',            icon: Heart },
+          { label: 'Dental Enrollment',  href: '/enroll/dental',     icon: CheckSquare },
+          { label: 'Cost Estimator',     href: '/enroll/estimator',  icon: DollarSign },
+          { label: 'Vision',             href: '/enroll/vision',     icon: Eye },
+          { label: 'FSA / HSA',          href: '/enroll/fsa',        icon: Wallet },
+          {
+            label: 'Inbox',
+            href: '/inbox',
+            icon: Mail,
+            ...(inboxCount && inboxCount > 0 ? { badge: inboxCount } : {}),
+          },
+        ],
+      },
+    ]
+  }
+
+  if (role === 'MANAGER') {
+    return [
+      {
+        label: 'WORKSPACE',
+        items: [
+          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+          { label: 'My Team',   href: '/workers',   icon: Users },
+          { label: 'Approvals', href: '/processes', icon: CheckSquare },
+          { label: 'Reports',   href: '/reports',   icon: BarChart3 },
+        ],
+      },
+      {
+        label: 'PERSONAL',
+        items: [
+          { label: 'My Benefits', href: '/enroll', icon: Heart },
+          {
+            label: 'Inbox',
+            href: '/inbox',
+            icon: Mail,
+            ...(inboxCount && inboxCount > 0 ? { badge: inboxCount } : {}),
+          },
+        ],
+      },
+    ]
+  }
+
+  // HR / Analyst roles: HRIS_ANALYST, BENEFITS_PARTNER, HR_LEADERSHIP
+  return [
+    {
+      label: 'MAIN',
+      items: [
+        { label: 'Dashboard',   href: '/dashboard',  icon: LayoutDashboard },
+        { label: 'Employee',    href: '/employees',  icon: User },
+        { label: 'Calendar',    href: '/calendar',   icon: Calendar },
+        { label: 'Team Member', href: '/workers',    icon: Users },
+      ],
+    },
+    {
+      label: 'MANAGEMENT',
+      items: [
+        { label: 'Time off',  href: '/time-off', icon: Clock },
+        { label: 'Reports',   href: '/reports',  icon: BarChart3 },
+        { label: 'Payrolls',  href: '/payroll',  icon: DollarSign },
+        { label: 'Benefits',  href: '/enroll',   icon: Heart },
+      ],
+    },
+    {
+      label: 'COMPANY',
+      items: [
+        { label: 'Documents',    href: '/documents',    icon: FileText },
+        { label: 'Integrations', href: '/integrations', icon: Link2 },
+        { label: 'Invoices',     href: '/invoices',     icon: Receipt },
+        { label: 'Settings',     href: '/settings',     icon: Settings },
+        { label: 'Help & Center',href: '/help',         icon: HelpCircle },
+      ],
+    },
+  ]
+}
 
 // Decorative icon rail app buttons — visual only, for demo
 const RAIL_APPS = [
@@ -64,6 +116,7 @@ interface SidebarProps {
 export function Sidebar({ currentRole, workerName, employeeId, onLogout }: SidebarProps) {
   const pathname = usePathname()
   const isHR = ['BENEFITS_PARTNER', 'HRIS_ANALYST', 'HR_LEADERSHIP'].includes(currentRole)
+  const navSections = getNavSections(currentRole)
 
   const avatarBg = isHR
     ? 'bg-violet-600'
@@ -165,7 +218,7 @@ export function Sidebar({ currentRole, workerName, employeeId, onLogout }: Sideb
 
         {/* Nav sections */}
         <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-5">
-          {NAV_SECTIONS.map(section => (
+          {navSections.map(section => (
             <div key={section.label}>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5">
                 {section.label}

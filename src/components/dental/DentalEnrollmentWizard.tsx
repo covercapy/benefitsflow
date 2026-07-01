@@ -12,6 +12,7 @@ import {
 // ── Types ──────────────────────────────────────────────────
 type Step = 'plan' | 'provider' | 'dependents' | 'coverage' | 'review' | 'confirm'
 type PlanChoice = 'PPO' | 'DHMO' | 'WAIVE'
+type CarrierChoice = 'Delta Dental' | 'Cigna'
 
 interface WizardState {
   planChoice: PlanChoice | null
@@ -20,6 +21,7 @@ interface WizardState {
   primaryProviderName: string | null
   dependentsSelected: string[]
   step: Step
+  carrierOverride: CarrierChoice | null
 }
 
 interface EnrollmentDependent {
@@ -98,6 +100,7 @@ export function DentalEnrollmentWizard() {
     primaryProviderName: null,
     dependentsSelected: [],
     step: 'plan',
+    carrierOverride: null,
   })
   const [providerSearch, setProviderSearch] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -144,7 +147,8 @@ export function DentalEnrollmentWizard() {
       .catch(() => setSubmitError('Connect Supabase and sign in to submit enrollment. Preview data is shown below.'))
   }, [])
 
-  const carrier = getDentalCarrierForState(worker.state)
+  const autoCarrier = getDentalCarrierForState(worker.state)
+  const carrier: CarrierChoice = state.carrierOverride ?? autoCarrier
   const daysLeft = Math.ceil((new Date(worker.enrollmentDeadline).getTime() - new Date().getTime()) / 86400000)
 
   async function handleSubmit() {
@@ -214,7 +218,11 @@ export function DentalEnrollmentWizard() {
         <span>
           <strong>Enrollment deadline:</strong> {worker.enrollmentDeadline} ·{' '}
           {daysLeft > 0 ? `${daysLeft} days remaining` : 'Deadline passed — contact HR'} ·{' '}
-          Your dental PPO carrier: <strong>{carrier}</strong> (based on {worker.state} work state)
+          PPO carrier:{' '}
+          <strong>{carrier}</strong>
+          {state.carrierOverride && state.carrierOverride !== autoCarrier
+            ? ' (your selection)'
+            : ` (auto-assigned · ${worker.state} state)`}
         </span>
       </div>
 
@@ -251,7 +259,11 @@ export function DentalEnrollmentWizard() {
           <PlanStep
             choice={state.planChoice}
             carrier={carrier}
+            autoCarrier={autoCarrier}
+            carrierOverride={state.carrierOverride}
             workState={worker.state}
+            dependentsSelected={state.dependentsSelected}
+            onCarrierChange={c => setState(s => ({ ...s, carrierOverride: c }))}
             onChange={choice => setState(s => ({ ...s, planChoice: choice,
               step: choice === 'WAIVE' ? 'review' : choice === 'DHMO' ? 'provider' : 'dependents'
             }))}
@@ -308,19 +320,32 @@ export function DentalEnrollmentWizard() {
             onEdit={goTo}
           />
         )}
+
       </div>
     </div>
   )
 }
 
 // ── Step: Plan Selection ────────────────────────────────────
-function PlanStep({ choice, carrier, workState, onChange }: {
+function PlanStep({ choice, carrier, autoCarrier, carrierOverride, workState, dependentsSelected, onCarrierChange, onChange }: {
   choice: PlanChoice | null
-  carrier: string
+  carrier: CarrierChoice
+  autoCarrier: CarrierChoice
+  carrierOverride: CarrierChoice | null
   workState: string
+  dependentsSelected: string[]
+  onCarrierChange: (c: CarrierChoice) => void
   onChange: (c: PlanChoice) => void
 }) {
   const [calcTier, setCalcTier] = useState<CoverageTier>('EF')
+
+  const hasDependents = dependentsSelected.length > 0
+  const isDeltaAutoState = ['ID', 'OR', 'WA'].includes(workState)
+
+  // Delta Dental is optimal when worker has dependents OR is in a Delta auto-assigned state
+  function isDeltaOptimal(): boolean {
+    return hasDependents || isDeltaAutoState
+  }
 
   const tiers: { tier: CoverageTier; label: string }[] = [
     { tier: 'EO', label: 'Just me' },
@@ -329,12 +354,35 @@ function PlanStep({ choice, carrier, workState, onChange }: {
     { tier: 'EF', label: 'Family' },
   ]
 
+  const carrierDetails: Record<CarrierChoice, { tagline: string; highlights: string[]; note: string }> = {
+    'Delta Dental': {
+      tagline: 'Largest dentist network in the US',
+      highlights: [
+        '$1,500 annual maximum',
+        '100% preventive coverage — no deductible on preventive',
+        'Largest dentist network nationwide',
+        'Orthodontia 50% covered · $1,500 lifetime max',
+      ],
+      note: 'No deductible on preventive care — cleanings and X-rays at $0.',
+    },
+    'Cigna': {
+      tagline: 'In-network nationwide coverage',
+      highlights: [
+        'In-network nationwide, $1,500 annual max',
+        '$50 individual / $150 family deductible',
+        'Orthodontia 50% covered · $1,500 lifetime max',
+        'Large preferred provider network',
+      ],
+      note: '$50 deductible applies to basic and major services.',
+    },
+  }
+
   return (
     <div className="p-6">
       <h2 className="text-base font-semibold text-slate-900 mb-1">Select Your Dental Plan</h2>
       <p className="text-sm text-slate-500 mb-5">
-        Your work state ({workState}) determines your PPO carrier: <strong>{carrier}</strong>.
-        The DHMO is available in all states through Cigna.
+        Your work state ({workState}) auto-assigns your PPO carrier to <strong>{autoCarrier}</strong>.
+        You may choose either carrier below. The DHMO is available in all states through Cigna.
       </p>
 
       {/* Comparison table */}
@@ -349,10 +397,14 @@ function PlanStep({ choice, carrier, workState, onChange }: {
           </thead>
           <tbody>
             {[
-              ['Annual Deductible', '$50 / $150 family', 'None'],
+              ['Annual Deductible',
+                carrier === 'Delta Dental' ? 'None on preventive / $50 basic+major' : '$50 / $150 family',
+                'None'],
               ['Calendar Year Max', '$1,500/person', 'Unlimited'],
               ['Orthodontia', '50% after deductible · $1,500 lifetime', 'Not covered'],
-              ['Preventive & Diagnostic', '$0 (no deductible)', '$5 copay'],
+              ['Preventive & Diagnostic',
+                carrier === 'Delta Dental' ? '$0 (no deductible — 100% covered)' : '$0 (no deductible)',
+                '$5 copay'],
               ['Basic Restorative (fillings)', '10% after deductible', 'Fixed copay'],
               ['Major Services (crowns)', '40% after deductible', 'Fixed copay'],
               ['Root Canal (molar)', '10% after deductible', '$250 copay'],
@@ -368,6 +420,80 @@ function PlanStep({ choice, carrier, workState, onChange }: {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* PPO Carrier selection */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Shield className="w-4 h-4 text-blue-600" />
+          <p className="text-sm font-semibold text-slate-800">PPO Carrier — Choose Your Provider</p>
+          <span className="text-xs text-slate-400">(applies if you select PPO below)</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(['Delta Dental', 'Cigna'] as CarrierChoice[]).map(c => {
+            const details = carrierDetails[c]
+            const isSelected = carrierOverride ? carrierOverride === c : autoCarrier === c
+            const isAutoAssigned = autoCarrier === c
+            const showOptimal = c === 'Delta Dental' ? isDeltaOptimal() : !isDeltaOptimal()
+            return (
+              <button
+                key={c}
+                onClick={() => onCarrierChange(c)}
+                className={cn(
+                  'relative rounded-xl border p-4 text-left transition-all',
+                  isSelected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                )}
+              >
+                {showOptimal && (
+                  <span className="absolute -top-2.5 left-3 text-[10px] bg-emerald-500 text-white font-bold px-2 py-0.5 rounded-full">
+                    OPTIMAL
+                  </span>
+                )}
+                {isAutoAssigned && !showOptimal && (
+                  <span className="absolute -top-2.5 left-3 text-[10px] bg-blue-500 text-white font-bold px-2 py-0.5 rounded-full">
+                    AUTO-ASSIGNED
+                  </span>
+                )}
+                {isAutoAssigned && showOptimal && (
+                  <span className="absolute -top-2.5 right-3 text-[10px] bg-slate-400 text-white font-medium px-2 py-0.5 rounded-full">
+                    auto-assigned
+                  </span>
+                )}
+                {isSelected && <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-blue-600" />}
+                <p className="text-sm font-semibold text-slate-900 mb-0.5">{c}</p>
+                <p className="text-xs text-slate-500 mb-2">{details.tagline}</p>
+                <ul className="space-y-1 mb-2">
+                  {details.highlights.map((h, i) => (
+                    <li key={i} className="text-xs text-slate-600 flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                      {h}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">{details.note}</p>
+              </button>
+            )
+          })}
+        </div>
+        {hasDependents && (
+          <div className="flex items-start gap-2 mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <Info className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-emerald-700">
+              <strong>Delta Dental recommended for families:</strong> No deductible on preventive care means
+              cleanings and X-rays are fully covered at $0 for you and every covered dependent — significant
+              savings for families with multiple children.
+            </p>
+          </div>
+        )}
+        {isDeltaAutoState && !hasDependents && (
+          <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <Info className="w-3.5 h-3.5 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-700">
+              Delta Dental is auto-assigned for your state ({workState}) and is optimal for your coverage area
+              with the largest dentist network.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Cost calculator */}
@@ -408,7 +534,7 @@ function PlanStep({ choice, carrier, workState, onChange }: {
             )
           })}
         </div>
-        <p className="text-[10px] text-slate-400 mt-2">* Sample rates for illustration. 26 pay periods/year. Employer contribution not deducted from paycheck.</p>
+        <p className="text-[10px] text-slate-400 mt-2">* Sample rates for illustration. 26 pay periods/year. Employer contribution not deducted from paycheck. Premiums are the same regardless of PPO carrier.</p>
       </div>
 
       {/* Plan cards */}
@@ -417,17 +543,27 @@ function PlanStep({ choice, carrier, workState, onChange }: {
           id="PPO"
           title={`Dental PPO`}
           subtitle={carrier}
-          badge="Most flexible"
+          badge={isDeltaOptimal() && carrier === 'Delta Dental' ? 'OPTIMAL' : 'Most flexible'}
           selected={choice === 'PPO'}
           onClick={() => onChange('PPO')}
-          highlights={[
-            'See any licensed dentist',
-            'Orthodontia covered ($1,500 lifetime)',
-            '$1,500 annual maximum',
-            'ID/OR/WA → Delta Dental; other states → Cigna',
-          ]}
+          highlights={
+            carrier === 'Delta Dental'
+              ? [
+                  'See any licensed dentist',
+                  '$1,500 annual maximum',
+                  '100% preventive — no deductible on cleanings',
+                  'Largest dentist network in the US',
+                ]
+              : [
+                  'See any licensed dentist',
+                  'Orthodontia covered ($1,500 lifetime)',
+                  '$1,500 annual maximum · $50 deductible',
+                  'In-network nationwide',
+                ]
+          }
           priceFrom="$8.50/mo"
           color="blue"
+          isOptimal={isDeltaOptimal() && carrier === 'Delta Dental'}
         />
         <PlanCard
           id="DHMO"
@@ -465,25 +601,25 @@ function PlanStep({ choice, carrier, workState, onChange }: {
   )
 }
 
-function PlanCard({ id, title, subtitle, badge, selected, onClick, highlights, priceFrom, color, isWaive }: {
+function PlanCard({ id, title, subtitle, badge, selected, onClick, highlights, priceFrom, color, isWaive, isOptimal }: {
   id: string, title: string, subtitle: string, badge?: string, selected: boolean,
-  onClick: () => void, highlights: string[], priceFrom: string, color: string, isWaive?: boolean
+  onClick: () => void, highlights: string[], priceFrom: string, color: string, isWaive?: boolean, isOptimal?: boolean
 }) {
   const borderColor = selected
     ? color === 'blue' ? 'border-blue-600' : color === 'teal' ? 'border-teal-600' : 'border-slate-400'
-    : 'border-slate-200'
+    : isOptimal ? 'border-emerald-300' : 'border-slate-200'
   const bgColor = selected
     ? color === 'blue' ? 'bg-blue-50' : color === 'teal' ? 'bg-teal-50' : 'bg-slate-50'
-    : 'bg-white hover:bg-slate-50'
+    : isOptimal ? 'bg-emerald-50 hover:bg-emerald-50' : 'bg-white hover:bg-slate-50'
 
   return (
     <button
       onClick={onClick}
-      className={cn('plan-card text-left relative', borderColor, bgColor, selected && 'shadow-sm')}
+      className={cn('plan-card text-left relative', borderColor, bgColor, selected && 'shadow-sm', isOptimal && 'ring-1 ring-emerald-300')}
     >
       {badge && (
         <span className={cn('absolute -top-3 left-4 text-white text-[10px] font-bold px-2 py-0.5 rounded-full',
-          color === 'blue' ? 'bg-blue-600' : color === 'teal' ? 'bg-teal-600' : 'bg-slate-500')}>
+          isOptimal ? 'bg-emerald-600' : color === 'blue' ? 'bg-blue-600' : color === 'teal' ? 'bg-teal-600' : 'bg-slate-500')}>
           {badge}
         </span>
       )}
@@ -492,13 +628,13 @@ function PlanCard({ id, title, subtitle, badge, selected, onClick, highlights, p
           color === 'blue' ? 'text-blue-600' : color === 'teal' ? 'text-teal-600' : 'text-slate-500')} />
       )}
       <p className="font-semibold text-slate-900 text-sm mb-0.5">{title}</p>
-      <p className="text-xs text-slate-500 mb-3">{subtitle}</p>
+      <p className={cn('text-xs mb-3', isOptimal ? 'text-emerald-700 font-medium' : 'text-slate-500')}>{subtitle}</p>
       <ul className="space-y-1 mb-4">
         {highlights.map((h, i) => (
           <li key={i} className="text-xs text-slate-600 flex items-start gap-1.5">
             {isWaive
               ? <XCircle className="w-3 h-3 text-slate-400 mt-0.5 shrink-0" />
-              : <CheckCircle2 className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />}
+              : <CheckCircle2 className={cn('w-3 h-3 mt-0.5 shrink-0', isOptimal ? 'text-emerald-600' : 'text-emerald-500')} />}
             {h}
           </li>
         ))}
@@ -783,7 +919,7 @@ function CoverageTierStep({ selected, dependentsSelected, dependents, planChoice
 
 // ── Step: Review & Submit ───────────────────────────────────
 function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge, dependents, onSubmit, submitting, submitError, onBack, onEdit }: {
-  state: WizardState, carrier: string, premiums: Record<CoverageTier, { employee: number; employer: number }>,
+  state: WizardState, carrier: CarrierChoice, premiums: Record<CoverageTier, { employee: number; employer: number }>,
   paycheckAmount: number, spouseSurcharge: boolean,
   dependents: EnrollmentDependent[],
   onSubmit: () => void, submitting?: boolean, submitError?: string | null,
@@ -791,6 +927,29 @@ function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge,
 }) {
   const isWaive = state.planChoice === 'WAIVE'
   const dep = dependents.filter(d => state.dependentsSelected.includes(d.id))
+
+  const carrierHighlights: Record<CarrierChoice, { tagline: string; coveragePoints: string[] }> = {
+    'Delta Dental': {
+      tagline: 'Largest dentist network · No deductible on preventive',
+      coveragePoints: [
+        '$1,500 annual maximum per person',
+        '100% preventive care — $0 for cleanings and X-rays',
+        'Orthodontia covered at 50% · $1,500 lifetime max',
+        'Largest dentist network in the United States',
+      ],
+    },
+    'Cigna': {
+      tagline: 'In-network nationwide · $1,500 annual max',
+      coveragePoints: [
+        '$1,500 annual maximum per person',
+        '$50 individual / $150 family deductible on basic and major services',
+        'Orthodontia covered at 50% · $1,500 lifetime max',
+        'Large in-network provider nationwide',
+      ],
+    },
+  }
+
+  const activeCarrierInfo = state.planChoice === 'PPO' ? carrierHighlights[carrier] : null
 
   return (
     <div className="p-6">
@@ -814,6 +973,35 @@ function ReviewStep({ state, carrier, premiums, paycheckAmount, spouseSurcharge,
           <ReviewRow label="Coverage Tier" value={state.coverageTier ? COVERAGE_TIER_LABELS[state.coverageTier] : '—'} onEdit={() => onEdit('coverage')} />
           <ReviewRow label="Dependents" value={dep.length === 0 ? 'None' : dep.map(d => d.name).join(', ')} onEdit={() => onEdit('dependents')} />
           <ReviewRow label="Effective Date" value="July 1, 2026" />
+
+          {/* Carrier coverage highlights */}
+          {activeCarrierInfo && (
+            <div className={cn(
+              'rounded-xl border p-4',
+              carrier === 'Delta Dental' ? 'border-emerald-200 bg-emerald-50' : 'border-blue-100 bg-blue-50'
+            )}>
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className={cn('w-4 h-4', carrier === 'Delta Dental' ? 'text-emerald-600' : 'text-blue-600')} />
+                <p className={cn('text-sm font-semibold', carrier === 'Delta Dental' ? 'text-emerald-900' : 'text-blue-900')}>
+                  Your Carrier: {carrier}
+                </p>
+                {carrier === 'Delta Dental' && dep.length > 0 && (
+                  <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">OPTIMAL FOR FAMILIES</span>
+                )}
+              </div>
+              <p className={cn('text-xs mb-2', carrier === 'Delta Dental' ? 'text-emerald-700' : 'text-blue-700')}>
+                {activeCarrierInfo.tagline}
+              </p>
+              <ul className="space-y-1">
+                {activeCarrierInfo.coveragePoints.map((point, i) => (
+                  <li key={i} className="text-xs text-slate-700 flex items-start gap-1.5">
+                    <CheckCircle2 className={cn('w-3 h-3 mt-0.5 shrink-0', carrier === 'Delta Dental' ? 'text-emerald-500' : 'text-blue-500')} />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Paycheck impact */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -887,7 +1075,7 @@ function ReviewRow({ label, value, onEdit }: { label: string, value: string, onE
 }
 
 // ── Confirmation Screen ─────────────────────────────────────
-function ConfirmationScreen({ state, carrier, confirmationNumber }: { state: WizardState, carrier: string, confirmationNumber?: string | null }) {
+function ConfirmationScreen({ state, carrier, confirmationNumber }: { state: WizardState, carrier: CarrierChoice, confirmationNumber?: string | null }) {
   const isWaive = state.planChoice === 'WAIVE'
   const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']
   const confetti = !isWaive ? Array.from({ length: 40 }, (_, i) => ({
